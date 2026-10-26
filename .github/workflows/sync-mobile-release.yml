@@ -1,0 +1,71 @@
+name: Sync Kable Killers Mobile release to store
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mobile-store-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update mobile download only after public signed APK release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, re, urllib.request, pathlib, sys
+          repo = "kablekillers/NuvioMobile"
+          request = urllib.request.Request(
+              f"https://api.github.com/repos/{repo}/releases/latest",
+              headers={"Accept": "application/vnd.github+json", "User-Agent": "Kable-Killers-Store-Sync"},
+          )
+          with urllib.request.urlopen(request, timeout=25) as response:
+              release = json.load(response)
+          tag = release["tag_name"]
+          if release.get("draft") or release.get("prerelease") or not re.fullmatch(r"v\d+\.\d+\.\d+", tag):
+              sys.exit("Latest release is not a stable published version")
+          name = "androidApp-full-universal-release.apk"
+          assets = [a for a in release.get("assets", []) if a["name"] == name and a.get("size", 0) > 0]
+          if len(assets) != 1:
+              sys.exit("Stable release lacks exactly one nonempty universal APK")
+          url = assets[0]["browser_download_url"]
+          expected = f"https://github.com/{repo}/releases/download/{tag}/{name}"
+          if url != expected:
+              sys.exit("Unexpected APK asset download URL")
+          file = pathlib.Path("index.html")
+          html = file.read_text()
+          pattern = r'(<a\s+class="card"\s+href=")https://github\.com/kablekillers/NuvioMobile/releases/download/v\d+\.\d+\.\d+/androidApp-full-universal-release\.apk("\s*>\s*<div class="icon">📱</div>\s*<div class="name">\s*Kable Killers Mobile\s*</div>\s*<div class="desc">\s*Kable Killers media app for Android phones\.\s*Version )\d+\.\d+\.\d+'
+          version = tag[1:]
+          updated, count = re.subn(pattern, lambda m: m.group(1) + url + m.group(2) + version, html)
+          if count != 1:
+              sys.exit("Mobile store listing not found exactly once; refusing to edit other apps")
+          if updated != html:
+              file.write_text(updated)
+              print(f"Updated Mobile listing to {tag}")
+          else:
+              print(f"Mobile listing already at {tag}")
+          PY
+      - name: Commit store update
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- index.html; then
+            echo "Store already up to date."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git commit -m "chore(store): sync Kable Killers Mobile release"
+          git push
