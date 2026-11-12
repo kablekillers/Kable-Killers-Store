@@ -51,7 +51,7 @@ jobs:
           print('TV launcher added to',found,'launcher filters')
           PY
       - name: Rebuild APK
-        run: apktool b --use-aapt2 decoded -o spotify-tv-unsigned.apk
+        run: apktool b decoded -o spotify-tv-unsigned.apk
       - name: Generate test-only signing key and sign
         run: |
           keytool -genkeypair -noprompt -keystore test.jks -storepass android -keypass android -alias test -keyalg RSA -keysize 3072 -validity 3650 -dname "CN=Kable Killers TV Test"
