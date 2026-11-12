@@ -1,0 +1,62 @@
+name: Build Spotify TV launcher test APK
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Install APK editing tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y apktool
+      - name: Download existing TV release APK
+        run: |
+          curl -fL --retry 3 -o spotify-original.apk "https://github.com/kablekillers/Kable-Killers-Store/releases/download/Spotify-premium-tv/Spotifytvpremium.apk"
+          test "$(stat -c%s spotify-original.apk)" -gt 100000000
+      - name: Decode APK resources and manifest
+        run: apktool d -f -s spotify-original.apk -o decoded
+      - name: Add Android TV launcher category
+        run: |
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          p='decoded/AndroidManifest.xml'
+          ET.register_namespace('android','http://schemas.android.com/apk/res/android')
+          tree=ET.parse(p)
+          root=tree.getroot()
+          ns='{http://schemas.android.com/apk/res/android}'
+          app=root.find('application')
+          if app is None: raise RuntimeError('No application')
+          found=0
+          for activity in app.findall('activity')+app.findall('activity-alias'):
+              for f in activity.findall('intent-filter'):
+                  actions=[a.get(ns+'name') for a in f.findall('action')]
+                  categories=[c.get(ns+'name') for c in f.findall('category')]
+                  if 'android.intent.action.MAIN' in actions and 'android.intent.category.LAUNCHER' in categories:
+                      if 'android.intent.category.LEANBACK_LAUNCHER' not in categories:
+                          ET.SubElement(f,'category',{ns+'name':'android.intent.category.LEANBACK_LAUNCHER'})
+                      found+=1
+          if found==0: raise RuntimeError('No MAIN/LAUNCHER activity found; aborting')
+          tree.write(p,encoding='utf-8',xml_declaration=True)
+          print('TV launcher added to',found,'launcher filters')
+          PY
+      - name: Rebuild APK
+        run: apktool b decoded -o spotify-tv-unsigned.apk
+      - name: Generate test-only signing key and sign
+        run: |
+          keytool -genkeypair -noprompt -keystore test.jks -storepass android -keypass android -alias test -keyalg RSA -keysize 3072 -validity 3650 -dname "CN=Kable Killers TV Test"
+          BUILD_TOOLS="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          "$BUILD_TOOLS/zipalign" -f -p 4 spotify-tv-unsigned.apk spotify-tv-aligned.apk
+          "$BUILD_TOOLS/apksigner" sign --ks test.jks --ks-key-alias test --ks-pass pass:android --key-pass pass:android --out Spotify-TV-Launcher-TEST.apk spotify-tv-aligned.apk
+          "$BUILD_TOOLS/apksigner" verify --verbose Spotify-TV-Launcher-TEST.apk
+      - name: Upload test APK (not a store release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Spotify-TV-Launcher-TEST
+          path: Spotify-TV-Launcher-TEST.apk
+          retention-days: 7
