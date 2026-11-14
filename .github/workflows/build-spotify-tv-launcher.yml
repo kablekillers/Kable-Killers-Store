@@ -47,6 +47,15 @@ jobs:
                           ET.SubElement(f,'category',{ns+'name':'android.intent.category.LEANBACK_LAUNCHER'})
                       found+=1
           if found==0: raise RuntimeError('No MAIN/LAUNCHER activity found; aborting')
+          # Apktool cannot decode two newer Android recreateOnConfigChanges flags.
+          # Remove only undecodable numeric placeholders to permit AAPT2 compilation.
+          removed=0
+          for element in root.iter():
+              attr=ns+'recreateOnConfigChanges'
+              if element.get(attr) in ('0x00004058','0x00004078'):
+                  del element.attrib[attr]
+                  removed+=1
+          print('Removed undecodable recreateOnConfigChanges values:',removed)
           tree.write(p,encoding='utf-8',xml_declaration=True)
           print('TV launcher added to',found,'launcher filters')
           PY
