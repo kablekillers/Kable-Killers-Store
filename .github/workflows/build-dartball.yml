@@ -1,0 +1,461 @@
+name: Build Dartball Scorebook
+
+# Builds the Dartball Scorebook Android app from dartball/scorebook.html,
+# publishes it as a release in this repo, and updates its card on the store page.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'dartball/**'
+      - '.github/workflows/build-dartball.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dartball-build
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version
+        run: |
+          N=${{ github.run_number }}
+          echo "VERSION_CODE=$((100 + N))" >> "$GITHUB_ENV"
+          echo "VER=2.$N" >> "$GITHUB_ENV"
+
+      - name: Signing key
+        env:
+          APP_KEYSTORE: ${{ secrets.APP_KEYSTORE }}
+        run: |
+          if [ -z "$APP_KEYSTORE" ]; then
+            echo "::error::Add the APP_KEYSTORE secret to this repo (Settings > Secrets and variables > Actions), then run this workflow again. Without it, updates couldn't install over the existing app."
+            exit 1
+          fi
+          mkdir -p android/app
+          echo "$APP_KEYSTORE" | base64 -d > /tmp/release.jks
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Create Android project
+        run: |
+          set -euo pipefail
+          mkdir -p android android/app android/app/src/main android/app/src/main/java/com/kablekillers/dartball android/app/src/main/res/drawable android/app/src/main/res/mipmap-anydpi-v26 android/app/src/main/res/values android/app/src/main/assets
+          cp dartball/scorebook.html android/app/src/main/assets/index.html
+          cat > 'android/app/build.gradle' <<'EOF_ANDROID'
+          plugins {
+              id 'com.android.application'
+          }
+          
+          def vc = Integer.parseInt(System.getenv("VERSION_CODE") ?: "1")
+          
+          android {
+              namespace 'com.kablekillers.dartball'
+              compileSdk 34
+          
+              defaultConfig {
+                  applicationId "com.kablekillers.dartball"
+                  minSdk 26
+                  targetSdk 34
+                  versionCode vc
+                  versionName "1." + vc
+              }
+          
+              signingConfigs {
+                  release {
+                      storeFile file("release.jks")
+                      storePassword System.getenv("KS_PASS")
+                      keyAlias System.getenv("KS_ALIAS")
+                      keyPassword System.getenv("KS_PASS")
+                  }
+              }
+          
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                      signingConfig signingConfigs.release
+                  }
+              }
+          
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+          
+              buildFeatures {
+                  buildConfig true
+              }
+          }
+          
+          dependencies {
+              implementation 'androidx.webkit:webkit:1.11.0'
+          }
+          EOF_ANDROID
+          cat > 'android/app/src/main/AndroidManifest.xml' <<'EOF_ANDROID'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <application
+                  android:label="Dartball Scorebook"
+                  android:icon="@mipmap/ic_launcher"
+                  android:roundIcon="@mipmap/ic_launcher"
+                  android:allowBackup="true"
+                  android:hardwareAccelerated="true"
+                  android:theme="@style/AppTheme">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:launchMode="singleTask"
+                      android:windowSoftInputMode="adjustResize"
+                      android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF_ANDROID
+          cat > 'android/app/src/main/java/com/kablekillers/dartball/MainActivity.java' <<'EOF_ANDROID'
+          package com.kablekillers.dartball;
+          
+          import android.app.Activity;
+          import android.content.ActivityNotFoundException;
+          import android.content.ClipData;
+          import android.content.ClipboardManager;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.net.Uri;
+          import android.os.Bundle;
+          import android.view.WindowManager;
+          import android.webkit.JavascriptInterface;
+          import android.webkit.ValueCallback;
+          import android.webkit.WebChromeClient;
+          import android.webkit.WebResourceRequest;
+          import android.webkit.WebResourceResponse;
+          import android.webkit.WebSettings;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+          import android.widget.Toast;
+          
+          import androidx.webkit.WebViewAssetLoader;
+          
+          import java.io.OutputStream;
+          import java.nio.charset.StandardCharsets;
+          
+          public class MainActivity extends Activity {
+              private static final String HOST = "appassets.androidplatform.net";
+              private static final String HOME = "https://" + HOST + "/assets/index.html";
+              private static final int REQ_OPEN = 11;
+              private static final int REQ_SAVE = 12;
+          
+              private WebView web;
+              private ValueCallback<Uri[]> fileCallback;
+              private String pendingSave;
+          
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  // Keep the screen awake while scoring.
+                  getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+          
+                  web = new WebView(this);
+                  web.setBackgroundColor(0xFF0F1512);
+                  setContentView(web);
+          
+                  final WebViewAssetLoader loader = new WebViewAssetLoader.Builder()
+                          .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
+                          .build();
+          
+                  WebSettings s = web.getSettings();
+                  s.setJavaScriptEnabled(true);
+                  s.setDomStorageEnabled(true);
+                  s.setDatabaseEnabled(true);
+                  s.setAllowFileAccess(false);
+                  s.setAllowContentAccess(true);
+                  s.setTextZoom(100);
+                  s.setSupportMultipleWindows(false);
+          
+                  web.addJavascriptInterface(new Bridge(), "AndroidApp");
+          
+                  web.setWebViewClient(new WebViewClient() {
+                      @Override
+                      public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                          return loader.shouldInterceptRequest(request.getUrl());
+                      }
+          
+                      @Override
+                      public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                          Uri u = request.getUrl();
+                          if (HOST.equals(u.getHost())) return false;
+                          openExternal(u);
+                          return true;
+                      }
+                  });
+          
+                  web.setWebChromeClient(new WebChromeClient() {
+                      @Override
+                      public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
+                          if (fileCallback != null) fileCallback.onReceiveValue(null);
+                          fileCallback = callback;
+                          Intent i = new Intent(Intent.ACTION_GET_CONTENT);
+                          i.addCategory(Intent.CATEGORY_OPENABLE);
+                          i.setType("*/*");
+                          try {
+                              startActivityForResult(Intent.createChooser(i, "Choose backup file"), REQ_OPEN);
+                          } catch (ActivityNotFoundException e) {
+                              fileCallback = null;
+                              return false;
+                          }
+                          return true;
+                      }
+                  });
+          
+                  if (savedInstanceState == null || web.restoreState(savedInstanceState) == null) {
+                      web.loadUrl(HOME);
+                  }
+              }
+          
+              @Override
+              protected void onSaveInstanceState(Bundle outState) {
+                  super.onSaveInstanceState(outState);
+                  web.saveState(outState);
+              }
+          
+              @Override
+              public void onBackPressed() {
+                  web.evaluateJavascript("(window.appBack && window.appBack()) ? 'y' : 'n'", value -> {
+                      if (value == null || !value.contains("y")) finish();
+                  });
+              }
+          
+              @Override
+              protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+                  super.onActivityResult(requestCode, resultCode, data);
+                  if (requestCode == REQ_OPEN) {
+                      if (fileCallback != null) {
+                          fileCallback.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data));
+                          fileCallback = null;
+                      }
+                  } else if (requestCode == REQ_SAVE) {
+                      if (resultCode == RESULT_OK && data != null && data.getData() != null && pendingSave != null) {
+                          try (OutputStream os = getContentResolver().openOutputStream(data.getData())) {
+                              os.write(pendingSave.getBytes(StandardCharsets.UTF_8));
+                              toast("Backup saved");
+                          } catch (Exception e) {
+                              toast("Backup failed: " + e.getMessage());
+                          }
+                      }
+                      pendingSave = null;
+                  }
+              }
+          
+              private void openExternal(Uri u) {
+                  String scheme = u.getScheme() == null ? "" : u.getScheme();
+                  Intent i = ("mailto".equals(scheme) || "sms".equals(scheme) || "smsto".equals(scheme))
+                          ? new Intent(Intent.ACTION_SENDTO, u)
+                          : new Intent(Intent.ACTION_VIEW, u);
+                  start(i, "No app found to open this");
+              }
+          
+              private void start(Intent i, String failMessage) {
+                  try {
+                      startActivity(i);
+                  } catch (ActivityNotFoundException e) {
+                      toast(failMessage);
+                  }
+              }
+          
+              private void toast(String msg) {
+                  Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
+              }
+          
+              /** Methods the scorebook page can call as window.AndroidApp.* */
+              class Bridge {
+                  @JavascriptInterface
+                  public void email(String subject, String body) {
+                      runOnUiThread(() -> {
+                          Intent i = new Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:"));
+                          i.putExtra(Intent.EXTRA_SUBJECT, subject);
+                          i.putExtra(Intent.EXTRA_TEXT, body);
+                          start(i, "No email app found");
+                      });
+                  }
+          
+                  @JavascriptInterface
+                  public void sms(String body) {
+                      runOnUiThread(() -> {
+                          Intent i = new Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:"));
+                          i.putExtra("sms_body", body);
+                          start(i, "No texting app found");
+                      });
+                  }
+          
+                  @JavascriptInterface
+                  public void share(String subject, String body) {
+                      runOnUiThread(() -> {
+                          Intent i = new Intent(Intent.ACTION_SEND);
+                          i.setType("text/plain");
+                          i.putExtra(Intent.EXTRA_SUBJECT, subject);
+                          i.putExtra(Intent.EXTRA_TEXT, body);
+                          start(Intent.createChooser(i, "Send scores"), "No app found to share with");
+                      });
+                  }
+          
+                  @JavascriptInterface
+                  public void copy(String text) {
+                      runOnUiThread(() -> {
+                          ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+                          if (cm != null) cm.setPrimaryClip(ClipData.newPlainText("Dartball", text));
+                      });
+                  }
+          
+                  @JavascriptInterface
+                  public void saveFile(String name, String text) {
+                      runOnUiThread(() -> {
+                          pendingSave = text;
+                          Intent i = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                          i.addCategory(Intent.CATEGORY_OPENABLE);
+                          i.setType("application/json");
+                          i.putExtra(Intent.EXTRA_TITLE, name);
+                          try {
+                              startActivityForResult(i, REQ_SAVE);
+                          } catch (ActivityNotFoundException e) {
+                              pendingSave = null;
+                              toast("Saving files isn't available on this device");
+                          }
+                      });
+                  }
+          
+                  @JavascriptInterface
+                  public String version() {
+                      return BuildConfig.VERSION_NAME;
+                  }
+              }
+          }
+          EOF_ANDROID
+          cat > 'android/app/src/main/res/drawable/ic_fg.xml' <<'EOF_ANDROID'
+          <?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp" android:height="108dp"
+              android:viewportWidth="108" android:viewportHeight="108">
+              <path android:fillColor="#F07A2E" android:pathData="M54,22 L86,54 L54,86 L22,54 Z" />
+              <path android:fillColor="#9EA6AD" android:pathData="M54,34 L74,54 L54,74 L34,54 Z" />
+              <path android:fillColor="#F07A2E" android:pathData="M54,46 L62,54 L54,62 L46,54 Z" />
+              <path android:fillColor="#5B84C4" android:pathData="M49,49 L59,49 L59,59 L49,59 Z" />
+              <path android:fillColor="#F6F4EE" android:pathData="M54,50 L58,54 L54,58 L50,54 Z" />
+              <path android:fillColor="#F6F4EE" android:pathData="M54,26 L60,32 L54,38 L48,32 Z" />
+              <path android:fillColor="#F6F4EE" android:pathData="M30,48 L36,54 L30,60 L24,54 Z" />
+              <path android:fillColor="#F6F4EE" android:pathData="M78,48 L84,54 L78,60 L72,54 Z" />
+              <path android:fillColor="#F6F4EE" android:pathData="M54,76 L57,79 L54,82 L51,79 Z" />
+          </vector>
+          EOF_ANDROID
+          cat > 'android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml' <<'EOF_ANDROID'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@color/ic_bg" />
+              <foreground android:drawable="@drawable/ic_fg" />
+          </adaptive-icon>
+          EOF_ANDROID
+          cat > 'android/app/src/main/res/values/styles.xml' <<'EOF_ANDROID'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="ic_bg">#94CFA6</color>
+              <color name="app_bg">#0F1512</color>
+              <style name="AppTheme" parent="@android:style/Theme.Material.NoActionBar">
+                  <item name="android:windowBackground">@color/app_bg</item>
+                  <item name="android:statusBarColor">@color/app_bg</item>
+                  <item name="android:navigationBarColor">@color/app_bg</item>
+              </style>
+          </resources>
+          EOF_ANDROID
+          cat > 'android/build.gradle' <<'EOF_ANDROID'
+          plugins {
+              id 'com.android.application' version '8.5.2' apply false
+          }
+          EOF_ANDROID
+          cat > 'android/gradle.properties' <<'EOF_ANDROID'
+          android.useAndroidX=true
+          org.gradle.jvmargs=-Xmx2g
+          EOF_ANDROID
+          cat > 'android/settings.gradle' <<'EOF_ANDROID'
+          pluginManagement {
+              repositories { google(); mavenCentral(); gradlePluginPortal() }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories { google(); mavenCentral() }
+          }
+          rootProject.name = "DartballScorebook"
+          include ':app'
+          EOF_ANDROID
+
+          cp /tmp/release.jks android/app/release.jks
+
+      - name: Build APK
+        working-directory: android
+        env:
+          KS_PASS: dartball-scorebook
+          KS_ALIAS: scorebook
+        run: |
+          sed -i 's/versionName "1." + vc/versionName "2." + (vc - 100)/' app/build.gradle
+          gradle --no-daemon assembleRelease
+
+      - name: Name the APK
+        run: |
+          mkdir -p dist
+          cp android/app/build/outputs/apk/release/app-release.apk "dist/DartballScorebook-v$VER.apk"
+          ls -la dist
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: dartball-scorebook-v${{ env.VER }}
+          name: Dartball Scorebook ${{ env.VER }}
+          target_commitish: ${{ github.sha }}
+          body: |
+            Wisconsin dartball scorekeeper for Android phones and tablets.
+            Install over the previous version; teams and stats are kept.
+          files: dist/*.apk
+
+      - name: Update store card
+        run: |
+          set -euo pipefail
+          git fetch -q origin main
+          git checkout -q -B main origin/main
+          python3 - <<'PY'
+          import os, re, pathlib
+          ver = os.environ["VER"]
+          url = f"https://github.com/kablekillers/Kable-Killers-Store/releases/download/dartball-scorebook-v{ver}/DartballScorebook-v{ver}.apk"
+          f = pathlib.Path("index.html")
+          html = f.read_text()
+          pattern = (r'(<a\s+class="card"\s+href=")[^"]+("\s*>\s*<div class="icon">🎯</div>\s*'
+                     r'<div class="name">\s*Dartball Scorebook\s*</div>\s*<div class="desc">\s*'
+                     r'Wisconsin dartball scorekeeper for Android phones and tablets\.\s*Version )[\d.]+')
+          new, n = re.subn(pattern, lambda m: m.group(1) + url + m.group(2) + ver, html)
+          if n != 1:
+              raise SystemExit("Dartball Scorebook card not found exactly once on the store page")
+          f.write_text(new)
+          print(f"Store card now points to {url}")
+          PY
+          if git diff --quiet -- index.html; then echo "Store page unchanged."; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git commit -m "chore(store): Dartball Scorebook $VER"
+          for i in 1 2 3; do git push && exit 0; git pull -q --rebase origin main; done
+          exit 1
