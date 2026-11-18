@@ -528,6 +528,7 @@ function renderHome(){
   }
   $app.innerHTML=`<div class="wrap">
     <div class="top"><div class="title" style="font-size:28px">Dartball Scorebook</div><button class="iconbtn" data-settings aria-label="Settings">⚙</button></div>
+    ${updateCard()}
     ${cur}
     ${seasonCard()}
     <div class="grid2" style="margin-bottom:12px">
@@ -563,6 +564,33 @@ function resume(){
   if(g.status==='final'){ if(g.n<m.games_total) return nextGame(); return go('match',{mid:m.id}); }
 }
 function ordinal(n){const s=['th','st','nd','rd'],v=n%100; return n+(s[(v-20)%10]||s[v]||s[0])}
+
+
+/* ---------- In-app update check (Android app only) ---------- */
+let UPDATE=null;
+function cmpVer(a,b){ const x=String(a).split('.').map(Number), y=String(b).split('.').map(Number); for(let i=0;i<Math.max(x.length,y.length);i++){ const d=(x[i]||0)-(y[i]||0); if(d) return d>0?1:-1 } return 0 }
+async function checkForUpdate(manual){
+  if(!APP || !AndroidApp.version){ if(manual) toast('Update checks work in the Android app'); return }
+  const cur=AndroidApp.version();
+  try{
+    const r=await fetch('https://api.github.com/repos/kablekillers/Kable-Killers-Store/releases?per_page=40',{headers:{Accept:'application/vnd.github+json'}});
+    if(!r.ok) throw new Error(r.status);
+    let best=null;
+    for(const x of await r.json()){
+      if(x.draft||x.prerelease) continue;
+      const m=/^dartball-scorebook-v(\d+(?:\.\d+)+)$/.exec(x.tag_name||''); if(!m) continue;
+      const a=(x.assets||[]).find(a=>/\.apk$/i.test(a.name)&&a.size>0); if(!a) continue;
+      if(!best||cmpVer(m[1],best.v)>0) best={v:m[1], url:a.browser_download_url};
+    }
+    if(best && cmpVer(best.v,cur)>0){ UPDATE=best; if(view.name==='home') render(); else toast(`Update ${best.v} available — see Home`) }
+    else if(manual) toast(`You're up to date (v${cur})`);
+  }catch(e){ if(manual) toast("Couldn't check for updates — are you online?") }
+}
+function updateCard(){
+  if(!UPDATE) return '';
+  return `<div class="card" style="border-color:var(--accent)"><div class="row"><div class="grow"><div style="font-weight:700">Update available: v${esc(UPDATE.v)}</div><div class="muted small">You have v${esc(AndroidApp.version())}. Install it over this one — your teams and stats stay.</div></div></div>
+    <a class="btn primary block" style="margin-top:10px" href="${esc(UPDATE.url)}">⬇ Download update</a></div>`;
+}
 
 /* ---------- Teams ---------- */
 function renderTeams(){
@@ -1135,6 +1163,7 @@ function renderSettings(){
       <label class="btn block" style="margin-top:10px">Restore from file<input type="file" id="imp" accept=".json,application/json" style="display:none"></label>
       <button class="btn block ghost" id="paste" style="margin-top:6px">Restore from pasted text</button>
     </div>
+    ${APP?`<div class="card"><h3>App</h3><button class="btn block" id="upd">Check for updates</button></div>`:''}
     <div class="card"><button class="btn block danger ghost" id="wipe">Erase everything</button></div>
     <p class="sync" id="sync" style="text-align:center">${syncText()}${APP&&AndroidApp.version?` · app v${esc(AndroidApp.version())}`:''}</p>
   </div>`;
@@ -1153,6 +1182,7 @@ function renderSettings(){
   q('#imp').onchange=async e=>{const f=e.target.files[0]; if(!f) return; restore(await f.text())};
   q('#paste').onclick=()=>sheet(`<h2>Paste backup</h2><textarea id="bt" style="width:100%;height:160px;background:var(--bg2);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px"></textarea><div class="row" style="margin-top:12px"><button class="btn grow" data-x>Cancel</button><button class="btn primary grow" data-ok>Restore</button></div>`,el=>{
     el.querySelector('[data-x]').onclick=closeSheet; el.querySelector('[data-ok]').onclick=()=>{const t=el.querySelector('#bt').value; closeSheet(); restore(t)}});
+  if(q('#upd')) q('#upd').onclick=()=>checkForUpdate(true);
   q('#wipe').onclick=()=>ask('Erase everything?','All teams, matches and stats on this device and in your account copy are deleted. Save a backup first if unsure.','Erase',()=>{const ids=Object.keys(S.matches); S=fresh(); S.savedAt=Date.now(); save(); queueCloud(true); ids.forEach(cloudDeleteMatch); go('home')},true);
 }
 function restore(text){
@@ -1167,6 +1197,7 @@ function restore(text){
 window.appBack=()=>{ if($layer.innerHTML){closeSheet(); return true} const b=$app.querySelector('[data-back]'); if(b){b.click(); return true} return false };
 render();
 initCloud();
+if(APP) setTimeout(()=>checkForUpdate(false),1500);
 WIDE_Q.addEventListener('change',()=>{ if(view.name==='lineup') render() });
 window.addEventListener('beforeunload',()=>{try{localStorage.setItem(LS_KEY, JSON.stringify(S))}catch(e){}});
 </script>
