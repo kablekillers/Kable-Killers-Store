@@ -1,0 +1,111 @@
+name: Sync Kable Killers app releases to store
+
+# Keeps the Kable Killers Mobile and Kable Killers TV download cards in index.html pointing at
+# the newest public release of each app. Runs every 15 minutes, and can be run by hand from the
+# Actions tab ("Run workflow") right after publishing. Only those two cards are ever edited.
+
+on:
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: app-store-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Point store cards at the latest public releases
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, pathlib, re, urllib.request
+
+          ABI = re.compile(r"-(arm64-v8a|armeabi-v7a|x86_64|x86)\.apk$")
+
+          def latest_release(repo):
+              request = urllib.request.Request(
+                  f"https://api.github.com/repos/{repo}/releases/latest",
+                  headers={"Accept": "application/vnd.github+json", "User-Agent": "Kable-Killers-Store-Sync"},
+              )
+              with urllib.request.urlopen(request, timeout=25) as response:
+                  return json.load(response)
+
+          def mobile_apk(release, tag):
+              # Mobile ships per-phone APKs plus one universal APK; the store links the universal one.
+              wanted = f"Kable-Killers-Mobile-{tag}-universal.apk"
+              return [a for a in release["assets"] if a["name"] == wanted]
+
+          def tv_apk(release, tag):
+              # TV ships one full APK, sometimes alongside per-chip ones; link the full one.
+              apks = [a for a in release["assets"] if a["name"].endswith(".apk") and not ABI.search(a["name"])]
+              universal = [a for a in apks if "universal" in a["name"]]
+              return universal or apks
+
+          APPS = [
+              {
+                  "label": "Kable Killers Mobile",
+                  "repo": "kablekillers/NuvioMobile",
+                  "pick": mobile_apk,
+                  "card": r'(<a\s+class="card"\s+href=")https://github\.com/kablekillers/NuvioMobile/releases/download/v\d+\.\d+\.\d+/[A-Za-z0-9._-]+\.apk("\s*>\s*<div class="icon">📱</div>\s*<div class="name">\s*Kable Killers Mobile\s*</div>\s*<div class="desc">\s*Kable Killers media app for Android phones\.\s*Version )\d+\.\d+\.\d+',
+              },
+              {
+                  "label": "Kable Killers TV",
+                  "repo": "kablekillers/NuvioTV",
+                  "pick": tv_apk,
+                  "card": r'(<a\s+class="card"\s+href=")https://github\.com/kablekillers/NuvioTV/releases/download/v\d+\.\d+\.\d+/[A-Za-z0-9._-]+\.apk("\s*>\s*<div class="icon">📺</div>\s*<div class="name">\s*Kable Killers TV\s*</div>\s*<div class="desc">\s*Kable Killers media app for Fire TV, onn, and Android TV\.\s*Version )\d+\.\d+\.\d+',
+              },
+          ]
+
+          page = pathlib.Path("index.html")
+          html = page.read_text()
+          for app in APPS:
+              label, repo = app["label"], app["repo"]
+              try:
+                  release = latest_release(repo)
+              except Exception as error:
+                  print(f"::warning::{label}: could not read the latest release ({error})")
+                  continue
+              tag = release.get("tag_name", "")
+              if release.get("draft") or release.get("prerelease") or not re.fullmatch(r"v\d+\.\d+\.\d+", tag):
+                  print(f"::warning::{label}: latest release {tag!r} is not a stable public version; left as is")
+                  continue
+              assets = [a for a in app["pick"](release, tag) if a.get("size", 0) > 0]
+              if len(assets) != 1:
+                  print(f"::warning::{label} {tag}: expected one full APK, found {len(assets)}; left as is")
+                  continue
+              url = assets[0]["browser_download_url"]
+              if not url.startswith(f"https://github.com/{repo}/releases/download/{tag}/"):
+                  print(f"::warning::{label} {tag}: unexpected download URL; left as is")
+                  continue
+              version = tag[1:]
+              updated, count = re.subn(app["card"], lambda m: m.group(1) + url + m.group(2) + version, html)
+              if count != 1:
+                  print(f"::warning::{label}: store card not found exactly once; left as is")
+                  continue
+              print(f"{label}: {'updated to' if updated != html else 'already at'} {tag}")
+              html = updated
+          page.write_text(html)
+          PY
+
+      - name: Commit store update
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- index.html; then
+            echo "Store already up to date."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git commit -m "chore(store): sync Kable Killers app releases"
+          git push
