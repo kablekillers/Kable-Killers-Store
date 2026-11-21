@@ -1,0 +1,13 @@
+{
+  "_readme": "Apps shown in Kable Killers > Settings > Install Apps. platforms: \"tv\", \"mobile\" or both. apkUrl must be a direct link to the .apk file.",
+  "apps": [
+    {
+      "id": "nebula",
+      "name": "Nebula",
+      "description": "Media player for streams that need Nebula. Always installs the newest release from the developer.",
+      "packageName": "com.nuvio.ckplayer",
+      "platforms": ["tv", "mobile"],
+      "apkUrl": "https://github.com/retrocodes12/nebula-android/releases/latest/download/Nebula.apk"
+    }
+  ]
+}
