@@ -1,11 +1,3 @@
 {
-  "messages": [
-    {
-      "id": "test-2026-11-27",
-      "title": "Test",
-      "body": "Test",
-      "level": "info",
-      "expires": "2026-11-28"
-    }
-  ]
+  "messages": []
 }
