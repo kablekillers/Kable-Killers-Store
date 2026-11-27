@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Kable Killers Installer</title>
+<style>
+:root{
+  --bg:#07090d; --panel:#10141c; --panel2:#161c27; --line:#232b3a;
+  --text:#eef3fb; --dim:#8c97a8; --blue:#1e9bff; --blue2:#0a6fd6; --glow:rgba(30,155,255,.35);
+  --good:#2fd17a; --bad:#ff5a5f; --warn:#ffb340;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+  font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+button,input{font:inherit;color:inherit}
+header{position:sticky;top:0;z-index:5;padding:14px 16px 10px;
+  background:linear-gradient(180deg,#0b111b 0%,rgba(7,9,13,.92) 100%);backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px}
+.logo{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;font-weight:800;
+  background:radial-gradient(circle at 30% 30%,#5cc0ff,var(--blue2));box-shadow:0 0 18px var(--glow);letter-spacing:-1px}
+header h1{font-size:17px;margin:0;font-weight:700}
+header .sub{font-size:12px;color:var(--dim)}
+.pill{margin-left:auto;font-size:12px;padding:5px 10px;border-radius:99px;border:1px solid var(--line);
+  color:var(--dim);display:flex;gap:6px;align-items:center;max-width:46%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dot{width:8px;height:8px;border-radius:50%;background:#555;flex:none}
+.pill.on{color:var(--text);border-color:rgba(47,209,122,.4)} .pill.on .dot{background:var(--good);box-shadow:0 0 8px var(--good)}
+main{padding:14px 14px 96px}
+.tab{display:none;animation:fade .25s ease} .tab.active{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:18px 4px 8px;font-weight:600}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:10px}
+.row{display:flex;align-items:center;gap:10px}
+.grow{flex:1;min-width:0}
+.title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.small{font-size:12.5px;color:var(--dim)}
+.btn{border:0;border-radius:12px;padding:11px 14px;background:var(--panel2);border:1px solid var(--line);
+  font-weight:600;cursor:pointer;transition:transform .08s,background .2s;white-space:nowrap}
+.btn:active{transform:scale(.96)}
+.btn.primary{background:linear-gradient(180deg,var(--blue),var(--blue2));border-color:transparent;box-shadow:0 4px 16px var(--glow)}
+.btn.danger{color:var(--bad)}
+.btn.sm{padding:7px 11px;font-size:13px;border-radius:10px}
+.btn.block{width:100%}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+input[type=text],input[type=number],input[type=url]{width:100%;background:#0b0f16;border:1px solid var(--line);
+  border-radius:12px;padding:11px 12px;outline:none}
+input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(30,155,255,.15)}
+label{font-size:12.5px;color:var(--dim);display:block;margin:8px 2px 5px}
+.icon{width:42px;height:42px;border-radius:12px;background:var(--panel2);display:grid;place-items:center;font-size:22px;flex:none}
+.empty{color:var(--dim);text-align:center;padding:20px 10px}
+nav{position:fixed;left:0;right:0;bottom:0;z-index:6;display:flex;background:rgba(10,13,19,.96);
+  border-top:1px solid var(--line);padding:6px 4px calc(6px + env(safe-area-inset-bottom))}
+nav button{flex:1;background:none;border:0;color:var(--dim);display:flex;flex-direction:column;align-items:center;
+  gap:2px;font-size:11px;padding:6px 0;border-radius:12px}
+nav button svg{width:23px;height:23px}
+nav button.active{color:var(--blue)}
+nav button.active svg{filter:drop-shadow(0 0 6px var(--glow))}
+.progress{height:6px;border-radius:9px;background:#0b0f16;overflow:hidden;margin-top:10px}
+.progress>div{height:100%;width:0;background:linear-gradient(90deg,var(--blue2),#6fd0ff);transition:width .2s}
+#busy{position:fixed;left:12px;right:12px;bottom:78px;z-index:7;display:none}
+#busy .card{box-shadow:0 10px 40px rgba(0,0,0,.6);border-color:rgba(30,155,255,.4)}
+#toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%) translateY(20px);opacity:0;z-index:9;
+  background:#1b2230;border:1px solid var(--line);padding:10px 16px;border-radius:12px;transition:.25s;max-width:90%;text-align:center}
+#toast.show{opacity:1;transform:translateX(-50%)}
+.modal{position:fixed;inset:0;z-index:10;background:rgba(0,0,0,.6);display:none;align-items:flex-end;justify-content:center}
+.modal.show{display:flex;animation:fade .2s}
+.sheet{background:var(--panel);border:1px solid var(--line);border-radius:20px 20px 0 0;width:100%;max-width:560px;
+  padding:18px 16px calc(18px + env(safe-area-inset-bottom));max-height:88vh;overflow:auto}
+.sheet h3{margin:0 0 6px;font-size:18px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{padding:7px 11px;border-radius:99px;background:var(--panel2);border:1px solid var(--line);font-size:12.5px}
+pre{background:#05070a;border:1px solid var(--line);border-radius:12px;padding:12px;margin:10px 0 0;
+  max-height:46vh;overflow:auto;white-space:pre-wrap;word-break:break-all;font:12.5px/1.45 ui-monospace,Menlo,Consolas,monospace;color:#bfe3ff}
+.remote{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;max-width:340px;margin:0 auto}
+.rk{aspect-ratio:1/1;border-radius:50%;background:var(--panel2);border:1px solid var(--line);display:grid;place-items:center;font-size:22px}
+.rk:active{background:#1d2636;transform:scale(.94)}
+.rk.ok{background:radial-gradient(circle at 35% 30%,#47b4ff,var(--blue2));box-shadow:0 0 22px var(--glow);font-weight:800;font-size:17px}
+.rk.ghost{visibility:hidden}
+.rrow{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;max-width:360px;margin:16px auto 0}
+.rrow .btn{padding:12px 0;font-size:18px}
+.tag{display:inline-block;vertical-align:middle;font-size:11px;padding:2px 7px;border-radius:6px;background:#1b2433;color:#9ccaff;margin-left:6px}
+.seg{display:flex;background:#0b0f16;border:1px solid var(--line);border-radius:12px;padding:3px;gap:3px}
+.seg button{flex:1;border:0;background:none;padding:8px;border-radius:9px;color:var(--dim);font-weight:600}
+.seg button.on{background:var(--panel2);color:var(--text)}
+img.shot{width:100%;border-radius:12px;border:1px solid var(--line);margin-top:10px;display:block}
+ol{padding-left:20px;margin:6px 0} ol li{margin:4px 0}
+.banner{border-color:rgba(30,155,255,.5);background:linear-gradient(135deg,#0f2036,#10141c)}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">KK</div>
+  <div><h1>KK Installer</h1><div class="sub" id="ver">Fire TV &amp; onn · no PC</div></div>
+  <div class="pill" id="status"><span class="dot"></span><span id="statusText">Not connected</span></div>
+</header>
+
+<main>
+<!-- ======================= DEVICES ======================= -->
+<section class="tab active" id="tab-devices">
+  <div class="card" id="connCard" style="display:none">
+    <div class="row">
+      <div class="icon">📺</div>
+      <div class="grow"><div class="title" id="connName">—</div><div class="small" id="connInfo"></div></div>
+      <button class="btn sm danger" onclick="disconnect()">Disconnect</button>
+    </div>
+  </div>
+
+  <h2>My devices</h2>
+  <div id="deviceList"></div>
+  <div class="grid2">
+    <button class="btn primary" onclick="openAdd()">＋ Add device</button>
+    <button class="btn" onclick="scan()">📡 Find on Wi-Fi</button>
+  </div>
+  <div id="scanResults"></div>
+
+  <h2>First time? Turn on ADB</h2>
+  <div class="card">
+    <div class="seg" id="helpSeg">
+      <button class="on" onclick="helpTab('fire',this)">Fire TV / Fire Stick</button>
+      <button onclick="helpTab('onn',this)">onn / Google TV</button>
+    </div>
+    <div id="help-fire">
+      <ol>
+        <li>Settings → <b>My Fire TV</b> → <b>About</b> → click your device name <b>7 times</b> until it says you're a developer.</li>
+        <li>Back to My Fire TV → <b>Developer Options</b> → turn <b>ADB Debugging ON</b>.</li>
+        <li>Find the IP: My Fire TV → About → <b>Network</b>.</li>
+        <li>Add it here and tap it. On the TV choose <b>“Always allow from this computer”</b> → <b>OK</b>.</li>
+      </ol>
+    </div>
+    <div id="help-onn" style="display:none">
+      <ol>
+        <li>Settings → <b>System</b> → <b>About</b> → click <b>Android TV OS build</b> <b>7 times</b>.</li>
+        <li>Settings → System → <b>Developer options</b> → turn <b>USB debugging ON</b>.</li>
+        <li>Find the IP: Settings → <b>Network &amp; Internet</b> → your Wi-Fi network.</li>
+        <li>Add it here and tap it. On the TV check <b>“Always allow from this computer”</b> → <b>OK</b>.</li>
+      </ol>
+    </div>
+    <div class="small">Phone and TV must be on the same Wi-Fi. Port is <b>5555</b>.</div>
+  </div>
+</section>
+
+<!-- ======================= INSTALL ======================= -->
+<section class="tab" id="tab-install">
+  <div class="card banner" id="sharedCard" style="display:none">
+    <div class="row">
+      <div class="icon">📦</div>
+      <div class="grow"><div class="title" id="sharedName"></div><div class="small">Opened from another app</div></div>
+      <button class="btn sm primary" onclick="installShared()">Install</button>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <button class="btn primary" onclick="pickInstall()">📁 APK from phone</button>
+    <button class="btn" onclick="pickPush()">⬆ Send file to TV</button>
+  </div>
+
+  <h2>Install from a link</h2>
+  <div class="card">
+    <input type="url" id="apkUrl" placeholder="https://…/app.apk" autocomplete="off" autocapitalize="off">
+    <button class="btn primary block" style="margin-top:10px" onclick="installFromUrl()">Download &amp; install on TV</button>
+  </div>
+
+  <h2 class="row"><span class="grow">Kable Killers Store</span><button class="btn sm" onclick="loadStore(true)">↻</button></h2>
+  <div id="storeList"><div class="empty">Loading store…</div></div>
+</section>
+
+<!-- ======================= APPS ======================= -->
+<section class="tab" id="tab-apps">
+  <div class="seg" style="margin-bottom:10px">
+    <button class="on" id="segUser" onclick="setAppMode('user')">Installed</button>
+    <button id="segSys" onclick="setAppMode('system')">System</button>
+    <button id="segOff" onclick="setAppMode('disabled')">Disabled</button>
+  </div>
+  <div class="row" style="gap:8px">
+    <input type="text" id="appFilter" placeholder="Search apps…" oninput="renderApps()" autocomplete="off">
+    <button class="btn" onclick="loadApps()">↻</button>
+  </div>
+  <div class="small" id="appCount" style="margin:8px 4px"></div>
+  <div id="appList"><div class="empty">Connect to a device to see its apps.</div></div>
+</section>
+
+<!-- ======================= REMOTE ======================= -->
+<section class="tab" id="tab-remote">
+  <div class="remote" style="margin-top:6px">
+    <button class="rk" onclick="key(4)" title="Back">↩</button>
+    <button class="rk" onclick="key(19)">▲</button>
+    <button class="rk" onclick="key(3)" title="Home">⌂</button>
+    <button class="rk" onclick="key(21)">◀</button>
+    <button class="rk ok" onclick="key(23)">OK</button>
+    <button class="rk" onclick="key(22)">▶</button>
+    <button class="rk" onclick="key(82)" title="Menu">☰</button>
+    <button class="rk" onclick="key(20)">▼</button>
+    <button class="rk" onclick="key(84)" title="Search">🔍</button>
+  </div>
+  <div class="rrow">
+    <button class="btn" onclick="key(89)">⏪</button>
+    <button class="btn" onclick="key(85)">⏯</button>
+    <button class="btn" onclick="key(90)">⏩</button>
+    <button class="btn" onclick="key(187)" title="Recent apps">🗂</button>
+    <button class="btn" onclick="key(25)">🔉</button>
+    <button class="btn" onclick="key(164)">🔇</button>
+    <button class="btn" onclick="key(24)">🔊</button>
+    <button class="btn" onclick="key(223)" title="Sleep">⏻</button>
+  </div>
+  <h2>Type on the TV</h2>
+  <div class="card">
+    <div class="row" style="gap:8px">
+      <input type="text" id="typeText" placeholder="Text for the focused box on TV" autocomplete="off">
+      <button class="btn primary" onclick="sendText()">Send</button>
+    </div>
+    <div class="row" style="gap:8px;margin-top:8px">
+      <button class="btn sm" onclick="key(67)">⌫ Delete</button>
+      <button class="btn sm" onclick="key(66)">⏎ Enter</button>
+      <button class="btn sm" onclick="key(224)">Wake</button>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= TOOLS ======================= -->
+<section class="tab" id="tab-tools">
+  <h2>Quick actions</h2>
+  <div class="grid2">
+    <button class="btn" onclick="screenshot()">📸 Screenshot</button>
+    <button class="btn" onclick="deviceInfo()">ℹ Device info</button>
+    <button class="btn" onclick="run('pm trim-caches 999G && echo Caches cleared','Clear caches')">🧹 Clear all caches</button>
+    <button class="btn" onclick="run('am kill-all && echo Background apps stopped','Stop background apps')">🛑 Stop bg apps</button>
+    <button class="btn" onclick="run('am start -a android.settings.SETTINGS','Open Settings')">⚙ Open TV Settings</button>
+    <button class="btn" onclick="run('am start -a android.settings.APPLICATION_DEVELOPMENT_SETTINGS','Developer options')">🛠 Developer options</button>
+    <button class="btn" onclick="confirmBox('Restart the TV?','The ADB connection will drop. Reconnect after it boots.','Restart',()=>run('reboot','Restart'))">🔄 Restart TV</button>
+    <button class="btn" onclick="run('df -h /data /sdcard 2>/dev/null || df /data','Storage')">💾 Storage</button>
+  </div>
+  <img class="shot" id="shot" style="display:none" alt="TV screenshot">
+
+  <h2>ADB shell</h2>
+  <div class="card">
+    <div class="row" style="gap:8px">
+      <input type="text" id="cmd" placeholder="e.g. pm list packages" autocomplete="off" autocapitalize="off"
+             onkeydown="if(event.key==='Enter')runCmd()">
+      <button class="btn primary" onclick="runCmd()">Run</button>
+    </div>
+    <div class="chips" style="margin-top:10px">
+      <span class="chip" onclick="setCmd('getprop ro.product.model')">model</span>
+      <span class="chip" onclick="setCmd('pm list packages -3')">user apps</span>
+      <span class="chip" onclick="setCmd('dumpsys battery | head -5')">power</span>
+      <span class="chip" onclick="setCmd('wm size; wm density')">screen</span>
+      <span class="chip" onclick="setCmd('ip addr show wlan0 | grep inet')">IP</span>
+      <span class="chip" onclick="setCmd('cat /proc/meminfo | head -3')">memory</span>
+      <span class="chip" onclick="setCmd('settings get secure install_non_market_apps')">unknown sources</span>
+      <span class="chip" onclick="setCmd('am start -a android.intent.action.VIEW -d https://')">open URL</span>
+    </div>
+    <pre id="out">Output shows here.</pre>
+    <div class="row" style="margin-top:8px"><span class="grow"></span><button class="btn sm" onclick="$('out').textContent=''">Clear</button></div>
+  </div>
+  <div class="small" style="text-align:center;margin-top:16px" id="footer"></div>
+</section>
+</main>
+
+<div id="busy"><div class="card">
+  <div class="row"><div class="grow"><div class="title" id="busyLabel">Working…</div><div class="small" id="busyDetail"></div></div></div>
+  <div class="progress"><div id="busyBar"></div></div>
+</div></div>
+<div id="toast"></div>
+
+<div class="modal" id="modal" onclick="if(event.target===this)closeModal()"><div class="sheet" id="sheet"></div></div>
+
+<nav>
+  <button class="active" data-tab="devices" onclick="go('devices')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Devices</button>
+  <button data-tab="install" onclick="go('install')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>Install</button>
+  <button data-tab="apps" onclick="go('apps')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Apps</button>
+  <button data-tab="remote" onclick="go('remote')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="6"/><circle cx="12" cy="9" r="2.5"/><path d="M10 15h4M10 18h4"/></svg>Remote</button>
+  <button data-tab="tools" onclick="go('tools')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m4 17 6-6-6-6M12 19h8"/></svg>ADB</button>
+</nav>
+
+<script>
+"use strict";
+const STORE_PAGE = "https://raw.githubusercontent.com/kablekillers/Kable-Killers-Store/main/index.html";
+const STORE_JSON = "https://raw.githubusercontent.com/kablekillers/Kable-Killers-Store/main/apps.json";
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const q = s => "'" + String(s).replace(/'/g, "'\\''") + "'";
+
+/* ---------- bridge (with a browser mock for previewing) ---------- */
+const App = window.AndroidApp || mockBridge();
+const pending = {};
+let cbSeq = 0;
+window.kkCb = (id, ok, result) => { const p = pending[id]; if (!p) return; delete pending[id]; ok ? p.res(result) : p.rej(new Error(result)); };
+window.kkEvent = (type, d) => {
+  if (type === "progress") showBusy(d.label, d.total > 0 ? d.done / d.total : -1, fmtBytes(d.done) + (d.total > 0 ? " of " + fmtBytes(d.total) : ""));
+  else if (type === "allowPrompt") showBusy("Look at your TV", -1, "Tap “Always allow from this computer”, then OK.");
+  else if (type === "shared") showShared();
+};
+function call(method, ...args) {
+  const id = "c" + (++cbSeq);
+  return new Promise((res, rej) => { pending[id] = { res, rej }; App[method](id, ...args); });
+}
+
+/* ---------- ui helpers ---------- */
+function toast(msg, ms = 2600) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), ms); }
+function showBusy(label, frac, detail = "") {
+  $("busy").style.display = "block"; $("busyLabel").textContent = label; $("busyDetail").textContent = detail;
+  const bar = $("busyBar");
+  if (frac < 0) { bar.style.width = "100%"; bar.style.opacity = ".35"; } else { bar.style.opacity = "1"; bar.style.width = Math.round(frac * 100) + "%"; }
+}
+function hideBusy() { $("busy").style.display = "none"; }
+function fmtBytes(n) { return n > 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB"; }
+function openModal(html) { $("sheet").innerHTML = html; $("modal").classList.add("show"); }
+function closeModal() { $("modal").classList.remove("show"); }
+function confirmBox(title, text, okLabel, fn, danger) {
+  openModal(`<h3>${esc(title)}</h3><p class="small">${esc(text)}</p>
+    <div class="grid2" style="margin-top:14px"><button class="btn" onclick="closeModal()">Cancel</button>
+    <button class="btn ${danger ? "danger" : "primary"}" id="okBtn">${esc(okLabel)}</button></div>`);
+  $("okBtn").onclick = () => { closeModal(); fn(); };
+}
+let currentTab = "devices";
+function go(tab) {
+  currentTab = tab;
+  document.querySelectorAll(".tab").forEach(s => s.classList.toggle("active", s.id === "tab-" + tab));
+  document.querySelectorAll("nav button").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+  window.scrollTo(0, 0);
+  if (tab === "apps" && connected() && !apps.loadedFor) loadApps();
+  if (tab === "install" && !storeLoaded) loadStore();
+}
+window.appBack = () => {
+  if ($("modal").classList.contains("show")) { closeModal(); return true; }
+  if (currentTab !== "devices") { go("devices"); return true; }
+  return false;
+};
+function helpTab(which, btn) {
+  $("help-fire").style.display = which === "fire" ? "" : "none";
+  $("help-onn").style.display = which === "onn" ? "" : "none";
+  document.querySelectorAll("#helpSeg button").forEach(b => b.classList.toggle("on", b === btn));
+}
+
+/* ---------- devices ---------- */
+function loadDevices() { try { return JSON.parse(localStorage.getItem("kk.devices") || "[]"); } catch (e) { return []; } }
+function saveDevices(list) { try { localStorage.setItem("kk.devices", JSON.stringify(list)); } catch (e) {} }
+let devices = loadDevices();
+let conn = null; // {target, model, ...}
+const connected = () => !!conn;
+
+function renderDevices() {
+  const el = $("deviceList");
+  if (!devices.length) { el.innerHTML = `<div class="card empty">No devices yet. Add your Fire Stick or onn by its IP address, or tap “Find on Wi-Fi”.</div>`; return; }
+  el.innerHTML = devices.map((d, i) => {
+    const t = d.ip + ":" + (d.port || 5555), on = conn && conn.target === t;
+    return `<div class="card row" onclick="connectTo(${i})">
+      <div class="icon">${d.kind === "fire" ? "🔥" : "📺"}</div>
+      <div class="grow"><div class="title">${esc(d.name || d.ip)}${on ? '<span class="tag">connected</span>' : ""}</div>
+      <div class="small">${esc(t)}${d.model ? " · " + esc(d.model) : ""}</div></div>
+      <button class="btn sm" onclick="event.stopPropagation();openAdd(${i})">Edit</button></div>`;
+  }).join("");
+}
+function openAdd(idx) {
+  const d = idx != null ? devices[idx] : { name: "", ip: "", port: 5555 };
+  openModal(`<h3>${idx != null ? "Edit device" : "Add device"}</h3>
+    <label>Name</label><input type="text" id="dName" value="${esc(d.name)}" placeholder="Living room Fire Stick">
+    <label>IP address</label><input type="text" id="dIp" value="${esc(d.ip)}" placeholder="192.168.1.50" inputmode="decimal">
+    <label>Port</label><input type="number" id="dPort" value="${esc(d.port || 5555)}">
+    <div class="grid2" style="margin-top:16px">
+      ${idx != null ? `<button class="btn danger" onclick="removeDevice(${idx})">Delete</button>` : `<button class="btn" onclick="closeModal()">Cancel</button>`}
+      <button class="btn primary" onclick="saveDevice(${idx != null ? idx : -1})">Save &amp; connect</button></div>`);
+  if (!d.ip) { const lip = App.localIp(); if (lip) $("dIp").value = lip.slice(0, lip.lastIndexOf(".") + 1); }
+}
+function saveDevice(idx) {
+  const ip = $("dIp").value.trim(), port = parseInt($("dPort").value, 10) || 5555;
+  if (!/^[\w.-]+$/.test(ip) || ip.endsWith(".")) { toast("Enter the TV's IP address"); return; }
+  const dev = { ...(idx >= 0 ? devices[idx] : {}), name: $("dName").value.trim() || ip, ip, port };
+  if (idx >= 0) devices[idx] = dev; else devices.push(dev);
+  saveDevices(devices); closeModal(); renderDevices();
+  connectTo(idx >= 0 ? idx : devices.length - 1);
+}
+function removeDevice(idx) { devices.splice(idx, 1); saveDevices(devices); closeModal(); renderDevices(); }
+
+async function connectTo(i) {
+  const d = devices[i];
+  showBusy("Connecting to " + (d.name || d.ip) + "…", -1, "If the TV asks, choose “Always allow”.");
+  try {
+    const info = await call("connect", d.ip, d.port || 5555);
+    hideBusy();
+    conn = info;
+    const isFire = /amazon/i.test(info.manufacturer) || /^AFT/i.test(info.model);
+    d.model = (isFire ? "Amazon " : (info.manufacturer ? info.manufacturer + " " : "")) + info.model;
+    d.kind = isFire ? "fire" : "tv";
+    saveDevices(devices);
+    setConnected(d);
+    apps.loadedFor = null;
+    toast("Connected to " + (d.name || d.ip));
+  } catch (e) { hideBusy(); setConnected(null); errorBox("Couldn't connect", e.message); }
+}
+function setConnected(d) {
+  if (!d) conn = null;
+  $("status").classList.toggle("on", !!conn);
+  $("statusText").textContent = conn ? (d && d.name || conn.target) : "Not connected";
+  $("connCard").style.display = conn ? "" : "none";
+  if (conn) { $("connName").textContent = d ? d.name : conn.target; $("connInfo").textContent = (d && d.model ? d.model + " · " : "") + "Android " + conn.android + " · " + conn.target; }
+  renderDevices();
+}
+function disconnect() { App.disconnect(); setConnected(null); apps.list = []; renderApps(); toast("Disconnected"); }
+function errorBox(title, msg) {
+  openModal(`<h3>${esc(title)}</h3><p class="small" style="white-space:pre-wrap">${esc(msg)}</p>
+    <button class="btn primary block" style="margin-top:12px" onclick="closeModal()">OK</button>`);
+}
+function requireConn() { if (!conn) { toast("Connect to a device first"); go("devices"); return false; } return true; }
+function lostConnection(e) { if (/Not connected|Lost connection/i.test(e.message)) setConnected(null); }
+
+async function scan() {
+  showBusy("Searching your Wi-Fi…", -1, "Looking for devices with ADB turned on");
+  try {
+    const found = await call("scan");
+    hideBusy();
+    const known = new Set(devices.map(d => d.ip));
+    $("scanResults").innerHTML = `<h2>Found on Wi-Fi</h2>` + (found.length ? found.map(ip => `
+      <div class="card row"><div class="icon">📡</div><div class="grow"><div class="title">${esc(ip)}</div>
+      <div class="small">ADB is open on this device</div></div>
+      ${known.has(ip) ? `<span class="small">saved</span>` : `<button class="btn sm primary" onclick="addFound('${esc(ip)}')">Add</button>`}</div>`).join("")
+      : `<div class="card empty">Nothing found. Make sure ADB / USB debugging is ON and the TV is awake on the same Wi-Fi.</div>`);
+  } catch (e) { hideBusy(); errorBox("Search failed", e.message); }
+}
+function addFound(ip) { devices.push({ name: "TV " + ip.split(".").pop(), ip, port: 5555 }); saveDevices(devices); renderDevices(); $("scanResults").innerHTML = ""; connectTo(devices.length - 1); }
+
+/* ---------- install ---------- */
+async function doInstall(promise, name) {
+  try {
+    showBusy("Starting…", -1, name);
+    const out = await promise;
+    hideBusy();
+    toast("✅ " + name + " installed", 3500);
+    apps.loadedFor = null;
+    return out;
+  } catch (e) {
+    hideBusy();
+    if (e.message !== "cancelled") { lostConnection(e); errorBox("Install failed", e.message); }
+  }
+}
+function installUrl(url, name) { if (requireConn()) doInstall(call("installUrl", url, name), name); }
+function installFromUrl() {
+  let url = $("apkUrl").value.trim();
+  if (!url) { toast("Paste a link to an .apk"); return; }
+  if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+  installUrl(url, decodeURIComponent(url.split("?")[0].split("/").pop() || "app.apk"));
+}
+function pickInstall() { if (requireConn()) doInstall(call("pickAndInstall"), "APK"); }
+async function pickPush() {
+  if (!requireConn()) return;
+  try { showBusy("Choose a file…", -1); const path = await call("pickAndPush"); hideBusy(); toast("Sent to " + path, 3500); }
+  catch (e) { hideBusy(); if (e.message !== "cancelled") errorBox("Send failed", e.message); }
+}
+function showShared() {
+  const n = App.sharedName();
+  $("sharedCard").style.display = n ? "" : "none";
+  $("sharedName").textContent = n;
+  if (n) go("install");
+}
+async function installShared() {
+  if (!requireConn()) return;
+  const n = App.sharedName();
+  await doInstall(call("installShared"), n);
+  showShared();
+}
+
+let storeLoaded = false;
+async function loadStore(force) {
+  if (storeLoaded && !force) return;
+  storeLoaded = true;
+  const el = $("storeList");
+  el.innerHTML = `<div class="empty">Loading store…</div>`;
+  const items = [], seen = new Set();
+  const add = it => { if (it.url && /\.apk(\?|$)/i.test(it.url) && !seen.has(it.url)) { seen.add(it.url); items.push(it); } };
+  try {
+    const html = await call("fetch", STORE_PAGE + "?t=" + Date.now());
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    doc.querySelectorAll("a.card").forEach(a => add({
+      url: a.getAttribute("href"),
+      name: (a.querySelector(".name")?.textContent || "").trim() || "App",
+      desc: (a.querySelector(".desc")?.textContent || "").trim().replace(/\s+/g, " "),
+      icon: (a.querySelector(".icon")?.textContent || "📦").trim()
+    }));
+  } catch (e) { /* fall through to apps.json */ }
+  try {
+    const j = JSON.parse(await call("fetch", STORE_JSON + "?t=" + Date.now()));
+    (j.apps || []).forEach(a => add({ url: a.apkUrl, name: a.name, desc: a.description || "", icon: "🎬", platforms: a.platforms }));
+  } catch (e) {}
+  store = items;
+  if (!items.length) { el.innerHTML = `<div class="card empty">Couldn't load the store. Check your internet and tap ↻.</div>`; storeLoaded = false; return; }
+  el.innerHTML = items.map((it, i) => `<div class="card row">
+    <div class="icon">${esc(it.icon)}</div>
+    <div class="grow"><div class="title" style="white-space:normal">${esc(it.name)}${/mobile|phone/i.test(it.name + " " + it.desc) && !/tv/i.test(it.name) ? '<span class="tag">phone app</span>' : ""}</div>
+    <div class="small">${esc(it.desc)}</div></div>
+    <button class="btn sm primary" onclick="installStore(${i})">Install</button></div>`).join("");
+}
+let store = [];
+function installStore(i) { const it = store[i]; installUrl(it.url, it.name); }
+
+/* ---------- apps ---------- */
+const apps = { mode: "user", list: [], loadedFor: null };
+function setAppMode(m) {
+  apps.mode = m;
+  $("segUser").classList.toggle("on", m === "user"); $("segSys").classList.toggle("on", m === "system"); $("segOff").classList.toggle("on", m === "disabled");
+  loadApps();
+}
+async function loadApps() {
+  if (!requireConn()) return;
+  $("appList").innerHTML = `<div class="empty">Loading…</div>`;
+  const flag = apps.mode === "user" ? "-3" : apps.mode === "system" ? "-s" : "-d";
+  try {
+    const out = await call("shell", "pm list packages " + flag + " 2>&1");
+    apps.list = out.split("\n").map(l => l.trim()).filter(l => l.startsWith("package:")).map(l => l.slice(8)).sort();
+    apps.loadedFor = conn.target + apps.mode;
+    renderApps();
+  } catch (e) { lostConnection(e); $("appList").innerHTML = `<div class="card empty">${esc(e.message)}</div>`; }
+}
+const KNOWN = {
+  "com.nuvio": "Kable Killers", "com.nuvio.ckplayer": "Nebula", "com.amazon.venezia": "Amazon Appstore",
+  "com.netflix.ninja": "Netflix", "com.netflix.mediaclient": "Netflix", "com.google.android.youtube.tv": "YouTube",
+  "com.amazon.amazonvideo.livingroom": "Prime Video", "com.disney.disneyplus": "Disney+", "com.hulu.livingroomplus": "Hulu",
+  "com.wbd.stream": "Max", "com.spotify.tv.android": "Spotify", "org.videolan.vlc": "VLC", "com.tubitv": "Tubi",
+  "ar.tvplayer.tv": "TiviMate", "com.esaba.downloader": "Downloader", "com.ipvanish.app": "IPVanish",
+  "com.peacocktv.peacockandroid": "Peacock", "com.plexapp.android": "Plex", "com.kablekillers.dartball": "Dartball Scorebook"
+};
+function friendly(pkg) {
+  if (KNOWN[pkg]) return KNOWN[pkg];
+  for (const k in KNOWN) if (pkg.startsWith(k + ".")) return KNOWN[k];
+  const parts = pkg.split(".").filter(p => !/^(com|org|net|tv|app|android|io|de|ar)$/.test(p));
+  const w = parts[parts.length - 1] || pkg;
+  return w.charAt(0).toUpperCase() + w.slice(1);
+}
+function renderApps() {
+  const f = $("appFilter").value.trim().toLowerCase();
+  const list = apps.list.filter(p => !f || p.toLowerCase().includes(f) || friendly(p).toLowerCase().includes(f));
+  $("appCount").textContent = conn ? list.length + " apps" : "";
+  if (!conn) { $("appList").innerHTML = `<div class="empty">Connect to a device to see its apps.</div>`; return; }
+  $("appList").innerHTML = list.length ? list.map(p => `<div class="card row" onclick="appSheet('${esc(p)}')">
+      <div class="icon">${esc(friendly(p).charAt(0))}</div>
+      <div class="grow"><div class="title">${esc(friendly(p))}</div><div class="small" style="word-break:break-all">${esc(p)}</div></div>
+      <span class="small">›</span></div>`).join("") : `<div class="empty">No apps.</div>`;
+}
+async function appSheet(pkg) {
+  openModal(`<h3>${esc(friendly(pkg))}</h3><div class="small" style="word-break:break-all">${esc(pkg)}</div>
+    <div class="small" id="appVer" style="margin-top:4px">Checking version…</div>
+    <div class="grid2" style="margin-top:14px">
+      <button class="btn primary" onclick="appAct('open','${esc(pkg)}')">▶ Open on TV</button>
+      <button class="btn" onclick="appAct('stop','${esc(pkg)}')">■ Force stop</button>
+      <button class="btn" onclick="appAct('cache','${esc(pkg)}')">🧹 Clear cache</button>
+      <button class="btn" onclick="appAct('clear','${esc(pkg)}')">🗑 Clear data</button>
+      ${apps.mode === "disabled" ? `<button class="btn" onclick="appAct('enable','${esc(pkg)}')">✅ Enable</button>` : `<button class="btn" onclick="appAct('disable','${esc(pkg)}')">🚫 Disable</button>`}
+      <button class="btn danger" onclick="appAct('uninstall','${esc(pkg)}')">✖ Uninstall</button>
+    </div>`);
+  try {
+    const out = await call("shell", "dumpsys package " + q(pkg) + " | grep -m1 versionName");
+    const v = (out.match(/versionName=(\S+)/) || [])[1];
+    if ($("appVer")) $("appVer").textContent = v ? "Version " + v : "";
+  } catch (e) { if ($("appVer")) $("appVer").textContent = ""; }
+}
+function appAct(act, pkg) {
+  const name = friendly(pkg), P = q(pkg);
+  const cmds = {
+    open: ["monkey -p " + P + " -c android.intent.category.LEANBACK_LAUNCHER 1 2>&1 | grep -q 'No activities' && monkey -p " + P + " -c android.intent.category.LAUNCHER 1; echo ok", "Opening " + name],
+    stop: ["am force-stop " + P + " && echo Stopped", name + " stopped"],
+    cache: ["pm trim-caches 999G; rm -rf /sdcard/Android/data/" + pkg.replace(/[^\w.]/g, "") + "/cache; echo ok", "Cache cleared"],
+    clear: ["pm clear " + P, name + " data cleared"],
+    disable: ["pm disable-user --user 0 " + P, name + " disabled"],
+    enable: ["pm enable " + P, name + " enabled"],
+    uninstall: [(apps.mode === "user" ? "pm uninstall " : "pm uninstall -k --user 0 ") + P, name + " uninstalled"]
+  };
+  const [cmd, msg] = cmds[act];
+  const exec = async () => {
+    closeModal();
+    showBusy(msg.replace(/ (stopped|cleared|disabled|enabled|uninstalled)$/, "") + "…", -1);
+    try {
+      const out = (await call("shell", cmd + " 2>&1")).trim();
+      hideBusy();
+      if (/Failure|Error|Exception|not allowed|Unknown/i.test(out)) errorBox("Didn't work", out);
+      else { toast(msg); if (["uninstall", "disable", "enable"].includes(act)) loadApps(); }
+    } catch (e) { hideBusy(); lostConnection(e); errorBox("Didn't work", e.message); }
+  };
+  if (act === "clear") confirmBox("Clear " + name + " data?", "This signs it out and resets its settings.", "Clear data", exec, true);
+  else if (act === "uninstall") confirmBox("Uninstall " + name + "?", apps.mode === "user" ? "It will be removed from the TV." : "This removes a system app for this user. Use Disable if unsure.", "Uninstall", exec, true);
+  else if (act === "disable") confirmBox("Disable " + name + "?", "It stays on the TV but won't run. You can enable it again in Apps → Disabled.", "Disable", exec, true);
+  else exec();
+}
+
+/* ---------- remote ---------- */
+function key(code) { if (!conn) { toast("Connect to a device first"); return; } if (navigator.vibrate) navigator.vibrate(12); App.key("input keyevent " + code); }
+function sendText() {
+  const t = $("typeText").value;
+  if (!t || !requireConn()) return;
+  App.key("input text " + q(t.replace(/ /g, "%s")));
+  $("typeText").value = "";
+  toast("Sent to TV");
+}
+
+/* ---------- tools ---------- */
+function setCmd(c) { $("cmd").value = c; $("cmd").focus(); }
+async function run(cmd, label) {
+  if (!requireConn()) return;
+  const out = $("out");
+  out.textContent = (label ? "▶ " + label : "$ " + cmd) + "\n";
+  showBusy(label || "Running…", -1);
+  try { const r = await call("shell", cmd + " 2>&1"); out.textContent += r || "(done, no output)\n"; toast(label ? label + " ✓" : "Done"); }
+  catch (e) { lostConnection(e); out.textContent += "Error: " + e.message; if (cmd === "reboot") setConnected(null); }
+  hideBusy();
+}
+function runCmd() { const c = $("cmd").value.trim(); if (c) run(c); }
+async function screenshot() {
+  if (!requireConn()) return;
+  showBusy("Taking screenshot…", -1);
+  try { const src = await call("screenshot"); const img = $("shot"); img.src = src; img.style.display = "block"; hideBusy(); img.scrollIntoView({ behavior: "smooth" }); }
+  catch (e) { hideBusy(); lostConnection(e); errorBox("Screenshot failed", e.message); }
+}
+function deviceInfo() {
+  run("echo Model: $(getprop ro.product.manufacturer) $(getprop ro.product.model); echo Android: $(getprop ro.build.version.release) \\(SDK $(getprop ro.build.version.sdk)\\); " +
+      "echo Fire OS: $(getprop ro.build.version.name); echo Screen: $(wm size | cut -d: -f2); " +
+      "echo IP: $(ip -4 addr show wlan0 2>/dev/null | grep -o 'inet [0-9.]*' | cut -d' ' -f2); echo Uptime: $(uptime); " +
+      "echo; df -h /data 2>/dev/null; echo; grep -E 'MemTotal|MemAvailable' /proc/meminfo", "Device info");
+}
+
+/* ---------- start ---------- */
+(function init() {
+  try { $("footer").textContent = "Kable Killers Installer v" + App.version(); } catch (e) {}
+  renderDevices();
+  const already = App.connectedTo();
+  if (already) { conn = { target: already, android: "?" }; const d = devices.find(x => x.ip + ":" + (x.port || 5555) === already); setConnected(d || { name: already }); }
+  showShared();
+})();
+
+/* ---------- browser preview mock (not used in the app) ---------- */
+function mockBridge() {
+  const later = (id, ok, v, ms = 600) => setTimeout(() => window.kkCb(id, ok, v), ms);
+  return {
+    version: () => "preview", connectedTo: () => "", localIp: () => "192.168.1.23", sharedName: () => "",
+    connect: (id, ip, port) => later(id, true, { target: ip + ":" + port, manufacturer: "Amazon", model: "AFTKA", android: "9", sdk: "28" }),
+    disconnect: () => {}, key: () => {},
+    shell: (id, c) => later(id, true, c.startsWith("pm list") ? "package:com.nuvio.tv\npackage:com.nuvio.ckplayer\npackage:com.netflix.ninja\npackage:org.videolan.vlc\npackage:com.esaba.downloader\n" : "ok\n"),
+    scan: id => later(id, true, ["192.168.1.50", "192.168.1.61"], 1200),
+    fetch: (id, url) => later(id, true, url.endsWith("json") || url.includes("apps.json") ? '{"apps":[{"name":"Nebula","description":"Media player","apkUrl":"https://x/Nebula.apk"}]}' :
+      '<a class="card" href="https://x/KK-TV.apk"><div class="icon">📺</div><div class="name">Kable Killers TV</div><div class="desc">For Fire TV, onn and Android TV. Version 1.1.13</div></a><a class="card" href="https://x/KK-Mobile.apk"><div class="icon">📱</div><div class="name">Kable Killers Mobile</div><div class="desc">Phone app</div></a>'),
+    installUrl: (id, url, name) => { let p = 0; const t = setInterval(() => { p += 0.2; window.kkEvent("progress", { label: "Sending " + name + " to TV", done: p * 30e6, total: 30e6 }); if (p >= 1) { clearInterval(t); window.kkCb(id, true, "Success"); } }, 300); },
+    pickAndInstall: id => later(id, false, "cancelled"), pickAndPush: id => later(id, false, "cancelled"),
+    screenshot: id => later(id, false, "Preview only"), installShared: id => later(id, true, "Success")
+  };
+}
+</script>
+</body>
+</html>

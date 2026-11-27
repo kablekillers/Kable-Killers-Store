@@ -1,0 +1,48 @@
+plugins {
+    id 'com.android.application'
+}
+
+def vc = Integer.parseInt(System.getenv("VERSION_CODE") ?: "1")
+def vn = System.getenv("VERSION_NAME") ?: "1.0"
+
+android {
+    namespace 'com.kablekillers.installer'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.kablekillers.installer"
+        minSdk 26
+        targetSdk 34
+        versionCode vc
+        versionName vn
+    }
+
+    signingConfigs {
+        release {
+            storeFile file(System.getenv("KS_FILE") ?: "release.jks")
+            storePassword System.getenv("KS_PASS")
+            keyAlias System.getenv("KS_ALIAS")
+            keyPassword System.getenv("KS_PASS")
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+}
+
+dependencies {
+    implementation 'androidx.webkit:webkit:1.11.0'
+}
