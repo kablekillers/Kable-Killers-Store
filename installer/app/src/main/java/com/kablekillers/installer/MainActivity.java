@@ -536,6 +536,11 @@ public class MainActivity extends Activity {
         Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         i.addCategory(Intent.CATEGORY_OPENABLE);
         i.setType("*/*");
+        // Show the phone's full storage (not just the Downloads index) so files in
+        // sub-folders like Download/Kable-Killers-TV-Test-APKs can be picked.
+        i.putExtra("android.provider.extra.SHOW_ADVANCED", true);
+        i.putExtra("android.content.extra.SHOW_ADVANCED", true);
+        i.putExtra("android.content.extra.FANCY", true);
         if (req == REQ_PICK_APK) {
             i.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{
                     "application/vnd.android.package-archive", "application/octet-stream"});
