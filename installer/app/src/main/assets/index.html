@@ -447,19 +447,50 @@ function requireConn() { if (!conn) { toast("Connect to a device first"); go("de
 function lostConnection(e) { if (/Not connected|Lost connection/i.test(e.message)) setConnected(null); }
 
 async function scan() {
-  showBusy("Searching your Wi-Fi…", -1, "Looking for devices with ADB turned on");
+  showBusy("Searching your Wi-Fi…", -1, "Finding Fire TVs and onn boxes (takes up to 20 seconds)");
   try {
-    const found = await call("scan");
+    let found = await call("scan");
     hideBusy();
+    found = found.map(x => typeof x === "string" ? { ip: x, adb: true } : x);
+    lastScan = found;
     const known = new Set(devices.map(d => d.ip));
-    $("scanResults").innerHTML = `<h2>Found on Wi-Fi</h2>` + (found.length ? found.map(ip => `
-      <div class="card row"><div class="icon">📡</div><div class="grow"><div class="title">${esc(ip)}</div>
-      <div class="small">ADB is open on this device</div></div>
-      ${known.has(ip) ? `<span class="small">saved</span>` : `<button class="btn sm primary" onclick="addFound('${esc(ip)}')">Add</button>`}</div>`).join("")
-      : `<div class="card empty">Nothing found. Make sure ADB / USB debugging is ON and the TV is awake on the same Wi-Fi.</div>`);
+    const label = t => t.name || ((t.maker ? t.maker + " " : "") + (t.model || "")).trim() || "Device " + t.ip;
+    $("scanResults").innerHTML = `<h2>Found on Wi-Fi</h2>` + (found.length ? found.map((t, i) => `
+      <div class="card row"><div class="icon">${/amazon|fire|aft/i.test(label(t) + t.maker) ? "🔥" : "📺"}</div>
+      <div class="grow"><div class="title">${esc(label(t))}</div>
+      <div class="small">${esc(t.ip)} · ${t.adb ? '<span style="color:var(--good)">ADB ready</span>' : '<span style="color:var(--warn)">ADB is off or asleep</span>'}</div></div>
+      ${known.has(t.ip) ? `<span class="small">saved</span>`
+        : t.adb ? `<button class="btn sm primary" onclick="addFound(${i})">Add</button>`
+        : `<button class="btn sm" onclick="adbOffHelp(${i})">Fix</button>`}</div>`).join("")
+      : `<div class="card empty">Nothing found. Wake the TV (press a button on its remote), make sure it's on the same Wi-Fi, and try again. You can also tap “Add device” and type its IP.</div>`);
   } catch (e) { hideBusy(); errorBox("Search failed", e.message); }
 }
-function addFound(ip) { devices.push({ name: "TV " + ip.split(".").pop(), ip, port: 5555 }); saveDevices(devices); renderDevices(); $("scanResults").innerHTML = ""; connectTo(devices.length - 1); }
+let lastScan = [];
+function adbOffHelp(i) {
+  const t = lastScan[i];
+  openModal(`<h3>${esc(t.name || t.ip)}</h3>
+    <p class="small">This TV is on your Wi-Fi but isn't accepting ADB yet. Usually it's one of these:</p>
+    <ol class="small">
+      <li><b>ADB is off.</b> Fire TV: Settings → My Fire TV → Developer Options → <b>ADB Debugging ON</b>. onn: Settings → System → Developer options → <b>USB debugging ON</b>. (No Developer Options? See “First time? Turn on ADB”.)</li>
+      <li><b>It's asleep.</b> Press a button on its remote to wake it.</li>
+      <li><b>It was just turned on.</b> Give it a minute after booting.</li>
+    </ol>
+    <div class="grid2" style="margin-top:12px">
+      <button class="btn" onclick="closeModal()">Close</button>
+      <button class="btn primary" onclick="recheck(${i})">Check again</button></div>`);
+}
+async function recheck(i) {
+  const t = lastScan[i];
+  closeModal(); showBusy("Checking " + (t.name || t.ip) + "…", -1);
+  const ok = await call("probe", t.ip, 5555).catch(() => false);
+  hideBusy();
+  if (ok) { t.adb = true; addFound(i); } else toast("Still not answering. Check ADB debugging is ON.", 3500);
+}
+function addFound(i) {
+  const t = lastScan[i];
+  devices.push({ name: t.name || "TV " + t.ip.split(".").pop(), ip: t.ip, port: 5555 });
+  saveDevices(devices); renderDevices(); $("scanResults").innerHTML = ""; connectTo(devices.length - 1);
+}
 
 /* ---------- install ---------- */
 async function doInstall(promise, name) {
@@ -799,7 +830,7 @@ function mockBridge() {
     connect: (id, ip, port) => later(id, true, { target: ip + ":" + port, manufacturer: "Amazon", model: "AFTKA", android: "9", sdk: "28" }),
     disconnect: () => {}, key: () => {},
     shell: (id, c) => later(id, true, c.includes("for f in") ? "d|0|Android\nd|0|Download\nd|0|Movies\nf|48213504|app-full-armeabi-v7a-debug.apk\nf|1932735283|Big Movie (2024).mkv\nf|2048|notes.txt\nFREE|/dev/block/dm-0  5.2G  3.9G  1.3G  76% /data" : c.startsWith("pm list") ? "package:com.nuvio.tv\npackage:com.nuvio.ckplayer\npackage:com.netflix.ninja\npackage:org.videolan.vlc\npackage:com.esaba.downloader\n" : "ok\n"),
-    scan: id => later(id, true, ["192.168.1.50", "192.168.1.61"], 1200),
+    scan: id => later(id, true, [{ip:"192.168.1.50",adb:true,name:"Living Room Fire TV",maker:"Amazon",model:"AFTKA"},{ip:"192.168.1.61",adb:false,name:"Bedroom Fire TV",maker:"Amazon",model:"AFTSS"},{ip:"192.168.1.77",adb:true,name:"",maker:"",model:""}], 1200), probe: id => later(id, false, false),
     fetch: (id, url) => later(id, true, url.endsWith("json") || url.includes("apps.json") ? '{"apps":[{"name":"Nebula","description":"Media player","apkUrl":"https://x/Nebula.apk"}]}' :
       '<a class="card" href="https://x/KK-TV.apk"><div class="icon">📺</div><div class="name">Kable Killers TV</div><div class="desc">For Fire TV, onn and Android TV. Version 1.1.13</div></a><a class="card" href="https://x/KK-Mobile.apk"><div class="icon">📱</div><div class="name">Kable Killers Mobile</div><div class="desc">Phone app</div></a>'),
     installUrl: (id, url, name) => { let p = 0; const t = setInterval(() => { p += 0.2; window.kkEvent("progress", { label: "Sending " + name + " to TV", done: p * 30e6, total: 30e6 }); if (p >= 1) { clearInterval(t); window.kkCb(id, true, "Success"); } }, 300); },

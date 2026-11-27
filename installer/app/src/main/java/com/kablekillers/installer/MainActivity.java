@@ -23,6 +23,7 @@ import androidx.webkit.WebViewAssetLoader;
 import com.kablekillers.installer.adb.AdbConnection;
 import com.kablekillers.installer.adb.AdbKey;
 import com.kablekillers.installer.adb.AdbSync;
+import com.kablekillers.installer.adb.TvFinder;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -484,40 +485,38 @@ public class MainActivity extends Activity {
             });
         }
 
-        /** Looks for TVs on this Wi-Fi with ADB port 5555 open. */
+        /** Finds TVs on this Wi-Fi (SSDP broadcast + ADB port scan of the whole subnet). */
         @JavascriptInterface
         public void scan(String cb) {
             ioExec.execute(() -> {
-                String ip = localIPv4();
-                if (ip == null) {
+                TvFinder.Net net = TvFinder.wifi();
+                if (net == null) {
                     fail(cb, "Connect this phone to Wi-Fi first.");
                     return;
                 }
-                String prefix = ip.substring(0, ip.lastIndexOf('.') + 1);
-                ExecutorService pool = Executors.newFixedThreadPool(48);
-                List<Future<String>> jobs = new ArrayList<>();
-                for (int i = 1; i < 255; i++) {
-                    final String host = prefix + i;
-                    if (host.equals(ip)) continue;
-                    jobs.add(pool.submit(() -> {
-                        try (Socket sk = new Socket()) {
-                            sk.connect(new InetSocketAddress(host, 5555), 600);
-                            return host;
-                        } catch (IOException e) {
-                            return null;
-                        }
-                    }));
-                }
-                JSONArray found = new JSONArray();
-                for (Future<String> f : jobs) {
-                    try {
-                        String h = f.get(5, TimeUnit.SECONDS);
-                        if (h != null) found.put(h);
-                    } catch (Exception ignored) {
+                try {
+                    JSONArray out = new JSONArray();
+                    for (TvFinder.Tv tv : TvFinder.find(net)) {
+                        out.put(new JSONObject().put("ip", tv.ip).put("adb", tv.adb)
+                                .put("name", tv.name).put("maker", tv.maker).put("model", tv.model));
                     }
+                    done(cb, out);
+                } catch (Exception e) {
+                    fail(cb, e);
                 }
-                pool.shutdownNow();
-                done(cb, found);
+            });
+        }
+
+        /** Re-checks one address (used by "Check again"). */
+        @JavascriptInterface
+        public void probe(String cb, String host, int port) {
+            ioExec.execute(() -> {
+                try (Socket sk = new Socket()) {
+                    sk.connect(new InetSocketAddress(host, port), 3000);
+                    done(cb, true);
+                } catch (IOException e) {
+                    done(cb, false);
+                }
             });
         }
 
