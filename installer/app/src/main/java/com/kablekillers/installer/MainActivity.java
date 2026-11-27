@@ -163,7 +163,7 @@ public class MainActivity extends Activity {
             try {
                 File f = new File(getCacheDir(), requestCode == REQ_PICK_APK ? "picked.apk" : "picked.bin");
                 copyUri(uri, f);
-                if (requestCode == REQ_PICK_APK || name.toLowerCase().endsWith(".apk")) {
+                if (requestCode == REQ_PICK_APK || name.toLowerCase().matches(".*\\.(apk|apks|xapk|apkm)$")) {
                     // An APK always gets installed, even from "Send file to TV".
                     runInstall(cb, f, name);
                 } else {
@@ -543,7 +543,7 @@ public class MainActivity extends Activity {
         i.putExtra("android.content.extra.FANCY", true);
         if (req == REQ_PICK_APK) {
             i.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{
-                    "application/vnd.android.package-archive", "application/octet-stream"});
+                    "application/vnd.android.package-archive", "application/octet-stream", "application/zip"});
         }
         try {
             startActivityForResult(i, req);
