@@ -162,7 +162,8 @@ public class MainActivity extends Activity {
             try {
                 File f = new File(getCacheDir(), requestCode == REQ_PICK_APK ? "picked.apk" : "picked.bin");
                 copyUri(uri, f);
-                if (requestCode == REQ_PICK_APK) {
+                if (requestCode == REQ_PICK_APK || name.toLowerCase().endsWith(".apk")) {
+                    // An APK always gets installed, even from "Send file to TV".
                     runInstall(cb, f, name);
                 } else {
                     final String remote = "/sdcard/Download/" + name.replace("'", "");

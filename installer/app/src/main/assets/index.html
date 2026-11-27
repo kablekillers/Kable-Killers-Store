@@ -151,8 +151,8 @@ ol{padding-left:20px;margin:6px 0} ol li{margin:4px 0}
   </div>
 
   <div class="grid2">
-    <button class="btn primary" onclick="pickInstall()">📁 APK from phone</button>
-    <button class="btn" onclick="pickPush()">⬆ Send file to TV</button>
+    <button class="btn primary" onclick="pickInstall()">📁 Install APK</button>
+    <button class="btn" onclick="pickPush()">⬆ Copy file to TV</button>
   </div>
 
   <h2>Install from a link</h2>
@@ -448,7 +448,7 @@ function installFromUrl() {
 function pickInstall() { if (requireConn()) doInstall(call("pickAndInstall"), "APK"); }
 async function pickPush() {
   if (!requireConn()) return;
-  try { showBusy("Choose a file…", -1); const path = await call("pickAndPush"); hideBusy(); toast("Sent to " + path, 3500); }
+  try { showBusy("Choose a file…", -1); const r = await call("pickAndPush"); hideBusy(); apps.loadedFor = null; toast(/Success/.test(r) ? "✅ Installed on TV" : "Sent to " + r, 3500); }
   catch (e) { hideBusy(); if (e.message !== "cancelled") errorBox("Send failed", e.message); }
 }
 function showShared() {
