@@ -85,6 +85,15 @@ pre{background:#05070a;border:1px solid var(--line);border-radius:12px;padding:1
 .seg button.on{background:var(--panel2);color:var(--text)}
 img.shot{width:100%;border-radius:12px;border:1px solid var(--line);margin-top:10px;display:block}
 ol{padding-left:20px;margin:6px 0} ol li{margin:4px 0}
+.crumbs{display:flex;gap:4px;overflow-x:auto;white-space:nowrap;padding:2px 0 8px;scrollbar-width:none}
+.crumbs button{background:none;border:0;color:var(--blue);padding:4px 2px;font-weight:600}
+.crumbs span{color:var(--dim);padding:4px 0}
+.frow{display:flex;align-items:center;gap:10px;padding:11px 12px;border-bottom:1px solid var(--line)}
+.frow:last-child{border-bottom:0}
+.frow .icon{width:36px;height:36px;font-size:19px;border-radius:10px}
+.frow input[type=checkbox]{width:20px;height:20px;accent-color:var(--blue);flex:none}
+.flist{padding:0;overflow:hidden}
+.selbar{position:sticky;top:64px;z-index:4;display:none;margin-bottom:10px}
 .banner{border-color:rgba(30,155,255,.5);background:linear-gradient(135deg,#0f2036,#10141c)}
 </style>
 </head>
@@ -217,6 +226,29 @@ ol{padding-left:20px;margin:6px 0} ol li{margin:4px 0}
   </div>
 </section>
 
+<!-- ======================= FILES ======================= -->
+<section class="tab" id="tab-files">
+  <div class="chips" style="margin-bottom:10px">
+    <span class="chip" onclick="openDir('/sdcard')">📱 Storage</span>
+    <span class="chip" onclick="openDir('/sdcard/Download')">⬇ Download</span>
+    <span class="chip" onclick="openDir('/sdcard/Movies')">🎬 Movies</span>
+    <span class="chip" onclick="openDir('/sdcard/Android/data')">📦 App data</span>
+    <span class="chip" onclick="openDir('/data/local/tmp')">🗑 Temp</span>
+  </div>
+  <div class="card selbar" id="selBar"><div class="row">
+    <div class="grow title" id="selCount">0 selected</div>
+    <button class="btn sm" onclick="toggleSelect(false)">Cancel</button>
+    <button class="btn sm danger" onclick="deleteSelected()">🗑 Delete</button>
+  </div></div>
+  <div class="crumbs" id="crumbs"></div>
+  <div class="row" style="gap:8px;margin-bottom:10px">
+    <div class="grow small" id="fileFree"></div>
+    <button class="btn sm" onclick="toggleSelect(!files.select)" id="selBtn">☑ Select</button>
+    <button class="btn sm" onclick="openDir(files.path)">↻</button>
+  </div>
+  <div class="card flist" id="fileList"><div class="empty">Connect to a device to browse its files.</div></div>
+</section>
+
 <!-- ======================= TOOLS ======================= -->
 <section class="tab" id="tab-tools">
   <h2>Quick actions</h2>
@@ -273,6 +305,8 @@ ol{padding-left:20px;margin:6px 0} ol li{margin:4px 0}
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Apps</button>
   <button data-tab="remote" onclick="go('remote')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="6"/><circle cx="12" cy="9" r="2.5"/><path d="M10 15h4M10 18h4"/></svg>Remote</button>
+  <button data-tab="files" onclick="go('files')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Files</button>
   <button data-tab="tools" onclick="go('tools')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m4 17 6-6-6-6M12 19h8"/></svg>ADB</button>
 </nav>
@@ -308,7 +342,7 @@ function showBusy(label, frac, detail = "") {
   if (frac < 0) { bar.style.width = "100%"; bar.style.opacity = ".35"; } else { bar.style.opacity = "1"; bar.style.width = Math.round(frac * 100) + "%"; }
 }
 function hideBusy() { $("busy").style.display = "none"; }
-function fmtBytes(n) { return n > 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB"; }
+function fmtBytes(n) { return n > 1073741824 ? (n / 1073741824).toFixed(2) + " GB" : n > 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB"; }
 function openModal(html) { $("sheet").innerHTML = html; $("modal").classList.add("show"); }
 function closeModal() { $("modal").classList.remove("show"); }
 function confirmBox(title, text, okLabel, fn, danger) {
@@ -325,9 +359,12 @@ function go(tab) {
   window.scrollTo(0, 0);
   if (tab === "apps" && connected() && !apps.loadedFor) loadApps();
   if (tab === "install" && !storeLoaded) loadStore();
+  if (tab === "files" && connected() && files.loadedFor !== conn.target) openDir(files.path);
 }
 window.appBack = () => {
   if ($("modal").classList.contains("show")) { closeModal(); return true; }
+  if (currentTab === "files" && files.select) { toggleSelect(false); return true; }
+  if (currentTab === "files" && files.path !== "/sdcard" && files.path !== "/") { openDir(files.path.slice(0, files.path.lastIndexOf("/")) || "/"); return true; }
   if (currentTab !== "devices") { go("devices"); return true; }
   return false;
 };
@@ -595,6 +632,131 @@ function sendText() {
   toast("Sent to TV");
 }
 
+/* ---------- files ---------- */
+const files = { path: "/sdcard", items: [], select: false, picked: new Set(), loadedFor: null };
+const joinPath = (dir, name) => (dir === "/" ? "" : dir) + "/" + name;
+function fileIcon(it) {
+  if (it.dir) return "📁";
+  const n = it.name.toLowerCase();
+  if (n.endsWith(".apk")) return "📦";
+  if (/\.(mp4|mkv|avi|mov|ts|m4v|webm)$/.test(n)) return "🎬";
+  if (/\.(mp3|flac|m4a|aac|wav|ogg)$/.test(n)) return "🎵";
+  if (/\.(jpg|jpeg|png|gif|webp)$/.test(n)) return "🖼";
+  if (/\.(zip|rar|7z|tar|gz)$/.test(n)) return "🗜";
+  return "📄";
+}
+async function openDir(path) {
+  if (!requireConn()) return;
+  path = (path || "/sdcard").replace(/\/+$/, "") || "/";
+  $("fileList").innerHTML = `<div class="empty">Loading…</div>`;
+  const P = q(path);
+  const script = "cd " + P + " 2>/dev/null || { echo 'ERR|cant'; exit; }; " +
+    "for f in .* *; do { [ \"$f\" = . ] || [ \"$f\" = .. ] || { [ ! -e \"$f\" ] && [ ! -L \"$f\" ]; }; } && continue; " +
+    "if [ -d \"$f\" ]; then echo \"d|0|$f\"; else echo \"f|$(stat -c %s \"$f\" 2>/dev/null || echo -1)|$f\"; fi; done; " +
+    "echo \"FREE|$(df -h " + P + " 2>/dev/null | tail -1)\"";
+  try {
+    const out = await call("shell", script);
+    if (out.startsWith("ERR|")) { files.items = []; $("fileList").innerHTML = `<div class="empty">Can't open this folder (no permission or it doesn't exist).</div>`; files.path = path; renderCrumbs(); return; }
+    const items = [];
+    let free = "";
+    out.split("\n").forEach(line => {
+      if (line.startsWith("FREE|")) { free = line.slice(5).trim(); return; }
+      const a = line.indexOf("|"), b = line.indexOf("|", a + 1);
+      if (a < 1 || b < 0) return;
+      const t = line.slice(0, a);
+      if (t !== "d" && t !== "f") return;
+      items.push({ dir: t === "d", size: parseInt(line.slice(a + 1, b), 10), name: line.slice(b + 1) });
+    });
+    items.sort((x, y) => (y.dir - x.dir) || x.name.localeCompare(y.name, undefined, { sensitivity: "base" }));
+    files.path = path; files.items = items; files.loadedFor = conn.target;
+    files.picked.clear(); updateSel();
+    const f = free.split(/\s+/);
+    $("fileFree").textContent = f.length >= 4 ? `Free: ${f[3]} of ${f[1]}` : "";
+    renderCrumbs(); renderFiles();
+  } catch (e) { lostConnection(e); $("fileList").innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+function renderCrumbs() {
+  const parts = files.path.split("/").filter(Boolean);
+  let acc = "", html = `<button onclick="openDir('/')">/</button>`;
+  parts.forEach((p, i) => { acc += "/" + p; html += (i ? "<span>›</span>" : "") + `<button data-p="${esc(acc)}" onclick="openDir(this.dataset.p)">${esc(p)}</button>`; });
+  $("crumbs").innerHTML = html;
+  $("crumbs").scrollLeft = 9999;
+}
+function renderFiles() {
+  const el = $("fileList");
+  const up = files.path !== "/" ? `<div class="frow" onclick="openDir(files.path.slice(0, files.path.lastIndexOf('/')) || '/')">
+      <div class="icon">⬆</div><div class="grow title">Up one folder</div></div>` : "";
+  if (!files.items.length) { el.innerHTML = up + `<div class="empty">This folder is empty.</div>`; return; }
+  el.innerHTML = up + files.items.map((it, i) => `<div class="frow" onclick="tapFile(${i})">
+      ${files.select ? `<input type="checkbox" ${files.picked.has(i) ? "checked" : ""} onclick="event.stopPropagation();pickFile(${i},this.checked)">` : ""}
+      <div class="icon">${fileIcon(it)}</div>
+      <div class="grow"><div class="title">${esc(it.name)}</div>
+      <div class="small">${it.dir ? "Folder" : (it.size >= 0 ? fmtBytes(it.size) : "File")}</div></div>
+      ${files.select ? "" : `<button class="btn sm" onclick="event.stopPropagation();fileSheet(${i})">⋯</button>`}</div>`).join("");
+}
+function tapFile(i) {
+  const it = files.items[i];
+  if (files.select) { pickFile(i, !files.picked.has(i)); renderFiles(); return; }
+  if (it.dir) openDir(joinPath(files.path, it.name)); else fileSheet(i);
+}
+function toggleSelect(on) { files.select = on; files.picked.clear(); updateSel(); renderFiles(); }
+function pickFile(i, on) { on ? files.picked.add(i) : files.picked.delete(i); updateSel(); }
+function updateSel() {
+  $("selBar").style.display = files.select ? "block" : "none";
+  $("selCount").textContent = files.picked.size + " selected";
+  $("selBtn").textContent = files.select ? "Done" : "☑ Select";
+}
+function fileSheet(i) {
+  const it = files.items[i], full = joinPath(files.path, it.name);
+  openModal(`<h3 style="word-break:break-all">${fileIcon(it)} ${esc(it.name)}</h3>
+    <div class="small" style="word-break:break-all">${esc(full)}</div>
+    <div class="small" id="fSize" style="margin-top:4px">${it.dir ? "Folder" : (it.size >= 0 ? fmtBytes(it.size) : "")}</div>
+    <div class="grid2" style="margin-top:14px">
+      ${it.dir ? `<button class="btn primary" onclick="closeModal();openDir(${esc(JSON.stringify(full))})">📂 Open</button>
+                 <button class="btn" onclick="folderSize(${i})">📏 How big?</button>`
+               : (/\.apk$/i.test(it.name) ? `<button class="btn primary" onclick="installTvFile(${i})">📦 Install</button>` : "")}
+      <button class="btn danger" onclick="deleteFiles([${i}])">🗑 Delete</button>
+    </div>`);
+}
+async function folderSize(i) {
+  const full = joinPath(files.path, files.items[i].name);
+  $("fSize").textContent = "Measuring…";
+  try { const out = await call("shell", "du -sh " + q(full) + " 2>/dev/null | tail -1"); if ($("fSize")) $("fSize").textContent = "Size: " + (out.trim().split(/\s+/)[0] || "?"); }
+  catch (e) { if ($("fSize")) $("fSize").textContent = e.message; }
+}
+async function installTvFile(i) {
+  const full = joinPath(files.path, files.items[i].name);
+  closeModal(); showBusy("Installing " + files.items[i].name + "…", -1);
+  try {
+    let out = (await call("shell", "pm install -r " + q(full) + " 2>&1")).trim();
+    if (!/Success/.test(out)) { // newer Android can't install straight from /sdcard: copy to temp first
+      const tmp = "/data/local/tmp/kk_tv_install.apk";
+      out = (await call("shell", "cp " + q(full) + " " + tmp + " && pm install -r " + tmp + " 2>&1; rm -f " + tmp)).trim();
+    }
+    hideBusy();
+    if (/Success/.test(out)) { toast("✅ Installed on TV", 3500); apps.loadedFor = null; } else errorBox("Install failed", out);
+  } catch (e) { hideBusy(); errorBox("Install failed", e.message); }
+}
+function deleteSelected() { if (!files.picked.size) { toast("Tick the files to delete"); return; } deleteFiles([...files.picked]); }
+function deleteFiles(idx) {
+  const list = idx.map(i => files.items[i]);
+  const outside = !files.path.startsWith("/sdcard") && !files.path.startsWith("/storage") && !files.path.startsWith("/data/local/tmp");
+  const what = list.length === 1 ? `“${list[0].name}”` : list.length + " items";
+  confirmBox("Delete " + what + "?",
+    (list.some(x => x.dir) ? "Folders are deleted with everything inside them. " : "") + "This can't be undone." +
+    (outside ? " ⚠ This is outside normal storage. Deleting system files can break the device." : ""),
+    "Delete", async () => {
+      showBusy("Deleting " + what + "…", -1);
+      try {
+        const cmd = "rm -rf " + list.map(x => q(joinPath(files.path, x.name))).join(" ") + " 2>&1";
+        const out = (await call("shell", cmd)).trim();
+        hideBusy();
+        if (out) errorBox("Some items weren't deleted", out); else toast("🗑 Deleted " + what);
+        files.select = false; openDir(files.path);
+      } catch (e) { hideBusy(); lostConnection(e); errorBox("Delete failed", e.message); }
+    }, true);
+}
+
 /* ---------- tools ---------- */
 function setCmd(c) { $("cmd").value = c; $("cmd").focus(); }
 async function run(cmd, label) {
@@ -636,7 +798,7 @@ function mockBridge() {
     version: () => "preview", connectedTo: () => "", localIp: () => "192.168.1.23", sharedName: () => "",
     connect: (id, ip, port) => later(id, true, { target: ip + ":" + port, manufacturer: "Amazon", model: "AFTKA", android: "9", sdk: "28" }),
     disconnect: () => {}, key: () => {},
-    shell: (id, c) => later(id, true, c.startsWith("pm list") ? "package:com.nuvio.tv\npackage:com.nuvio.ckplayer\npackage:com.netflix.ninja\npackage:org.videolan.vlc\npackage:com.esaba.downloader\n" : "ok\n"),
+    shell: (id, c) => later(id, true, c.includes("for f in") ? "d|0|Android\nd|0|Download\nd|0|Movies\nf|48213504|app-full-armeabi-v7a-debug.apk\nf|1932735283|Big Movie (2024).mkv\nf|2048|notes.txt\nFREE|/dev/block/dm-0  5.2G  3.9G  1.3G  76% /data" : c.startsWith("pm list") ? "package:com.nuvio.tv\npackage:com.nuvio.ckplayer\npackage:com.netflix.ninja\npackage:org.videolan.vlc\npackage:com.esaba.downloader\n" : "ok\n"),
     scan: id => later(id, true, ["192.168.1.50", "192.168.1.61"], 1200),
     fetch: (id, url) => later(id, true, url.endsWith("json") || url.includes("apps.json") ? '{"apps":[{"name":"Nebula","description":"Media player","apkUrl":"https://x/Nebula.apk"}]}' :
       '<a class="card" href="https://x/KK-TV.apk"><div class="icon">📺</div><div class="name">Kable Killers TV</div><div class="desc">For Fire TV, onn and Android TV. Version 1.1.13</div></a><a class="card" href="https://x/KK-Mobile.apk"><div class="icon">📱</div><div class="name">Kable Killers Mobile</div><div class="desc">Phone app</div></a>'),
